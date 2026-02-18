@@ -22,6 +22,12 @@ func ShouldShowInitDialog() (bool, error) {
 		return false, fmt.Errorf("config not loaded")
 	}
 
+	// If CLAUDE.md already exists in the working directory, skip the dialog
+	claudeMdPath := filepath.Join(WorkingDirectory(), "CLAUDE.md")
+	if _, err := os.Stat(claudeMdPath); err == nil {
+		return false, nil
+	}
+
 	// Create the flag file path
 	flagFilePath := filepath.Join(cfg.Data.Directory, InitFlagFilename)
 

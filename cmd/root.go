@@ -23,8 +23,8 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "omcc",
-	Short: "Claude Code's brain, OpenCode's beauty — a polished TUI for Claude Code",
-	Long: `oh-my-claude-code (omcc) wraps Claude Code's full agent engine in OpenCode's
+	Short: "A polished TUI wrapper for Claude Code",
+	Long: `oh-my-claude-code (omcc) wraps Claude Code's full agent engine in a
 beautiful Bubble Tea TUI. You get Claude Code's complete capabilities — tools, hooks,
 MCP servers, custom agents, plan mode — rendered in a polished terminal interface.`,
 	Example: `

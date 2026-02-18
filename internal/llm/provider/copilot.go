@@ -62,7 +62,7 @@ func (c *copilotClient) exchangeGitHubToken(githubToken string) (string, error) 
 	}
 
 	req.Header.Set("Authorization", "Token "+githubToken)
-	req.Header.Set("User-Agent", "OpenCode/1.0")
+	req.Header.Set("User-Agent", "omcc/1.0")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -164,8 +164,8 @@ func newCopilotClient(opts providerClientOptions) CopilotClient {
 
 	// Add GitHub Copilot specific headers
 	openaiClientOptions = append(openaiClientOptions,
-		option.WithHeader("Editor-Version", "OpenCode/1.0"),
-		option.WithHeader("Editor-Plugin-Version", "OpenCode/1.0"),
+		option.WithHeader("Editor-Version", "omcc/1.0"),
+		option.WithHeader("Editor-Plugin-Version", "omcc/1.0"),
 		option.WithHeader("Copilot-Integration-Id", "vscode-chat"),
 	)
 

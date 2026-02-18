@@ -97,6 +97,7 @@ func newClaudeCodeClient(opts providerClientOptions) ClaudeCodeClient {
 // buildCommand constructs the exec.Cmd for the claude CLI process.
 func (c *claudeCodeClient) buildCommand(ctx context.Context) *exec.Cmd {
 	args := []string{
+		"--print",
 		"--output-format", "stream-json",
 		"--input-format", "stream-json",
 		"--verbose",
