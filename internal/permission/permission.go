@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/pubsub"
+	"github.com/Krontx/oh-my-claude-code/internal/config"
+	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
 )
 
 var ErrorPermissionDenied = errors.New("permission denied")

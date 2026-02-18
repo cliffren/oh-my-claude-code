@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencode-ai/opencode/internal/lsp"
-	"github.com/opencode-ai/opencode/internal/lsp/protocol"
+	"github.com/Krontx/oh-my-claude-code/internal/lsp"
+	"github.com/Krontx/oh-my-claude-code/internal/lsp/protocol"
 )
 
 type DiagnosticsParams struct {

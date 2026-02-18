@@ -7,16 +7,16 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/llm/models"
-	"github.com/opencode-ai/opencode/internal/lsp"
-	"github.com/opencode-ai/opencode/internal/lsp/protocol"
-	"github.com/opencode-ai/opencode/internal/pubsub"
-	"github.com/opencode-ai/opencode/internal/session"
-	"github.com/opencode-ai/opencode/internal/tui/components/chat"
-	"github.com/opencode-ai/opencode/internal/tui/styles"
-	"github.com/opencode-ai/opencode/internal/tui/theme"
-	"github.com/opencode-ai/opencode/internal/tui/util"
+	"github.com/Krontx/oh-my-claude-code/internal/config"
+	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
+	"github.com/Krontx/oh-my-claude-code/internal/lsp"
+	"github.com/Krontx/oh-my-claude-code/internal/lsp/protocol"
+	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
+	"github.com/Krontx/oh-my-claude-code/internal/session"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/components/chat"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
 )
 
 type StatusCmp interface {

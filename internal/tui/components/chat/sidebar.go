@@ -8,13 +8,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/diff"
-	"github.com/opencode-ai/opencode/internal/history"
-	"github.com/opencode-ai/opencode/internal/pubsub"
-	"github.com/opencode-ai/opencode/internal/session"
-	"github.com/opencode-ai/opencode/internal/tui/styles"
-	"github.com/opencode-ai/opencode/internal/tui/theme"
+	"github.com/Krontx/oh-my-claude-code/internal/config"
+	"github.com/Krontx/oh-my-claude-code/internal/diff"
+	"github.com/Krontx/oh-my-claude-code/internal/history"
+	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
+	"github.com/Krontx/oh-my-claude-code/internal/session"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 )
 
 type sidebarCmp struct {

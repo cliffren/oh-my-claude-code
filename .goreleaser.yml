@@ -1,5 +1,5 @@
 version: 2
-project_name: opencode
+project_name: omcc
 before:
   hooks:
 builds:
@@ -12,13 +12,13 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X github.com/opencode-ai/opencode/internal/version.Version={{.Version}}
+      - -s -w -X github.com/Krontx/oh-my-claude-code/internal/version.Version={{.Version}}
     main: ./main.go
 
 archives:
   - format: tar.gz
     name_template: >-
-      opencode-
+      omcc-
       {{- if eq .Os "darwin" }}mac-
       {{- else if eq .Os "windows" }}windows-
       {{- else if eq .Os "linux" }}linux-{{end}}
@@ -34,27 +34,27 @@ checksum:
 snapshot:
   name_template: "0.0.0-{{ .Timestamp }}"
 aurs:
-  - name: opencode-ai
-    homepage: "https://github.com/opencode-ai/opencode"
-    description: "terminal based agent that can build anything"
+  - name: omcc
+    homepage: "https://github.com/Krontx/oh-my-claude-code"
+    description: "Claude Code's brain, OpenCode's beauty — a polished TUI for Claude Code"
     maintainers:
       - "kujtimiihoxha <kujtimii.h@gmail.com>"
     license: "MIT"
     private_key: "{{ .Env.AUR_KEY }}"
-    git_url: "ssh://aur@aur.archlinux.org/opencode-ai-bin.git"
+    git_url: "ssh://aur@aur.archlinux.org/omcc-bin.git"
     provides:
-      - opencode
+      - omcc
     conflicts:
-      - opencode
+      - omcc
     package: |-
-      install -Dm755 ./opencode "${pkgdir}/usr/bin/opencode"
+      install -Dm755 ./omcc "${pkgdir}/usr/bin/omcc"
 brews:
   - repository:
-      owner: opencode-ai
+      owner: Krontx
       name: homebrew-tap
 nfpms:
   - maintainer: kujtimiihoxha
-    description: terminal based agent that can build anything
+    description: "Claude Code's brain, OpenCode's beauty — a polished TUI for Claude Code"
     formats:
       - deb
       - rpm

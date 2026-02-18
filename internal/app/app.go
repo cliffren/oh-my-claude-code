@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/db"
-	"github.com/opencode-ai/opencode/internal/format"
-	"github.com/opencode-ai/opencode/internal/history"
-	"github.com/opencode-ai/opencode/internal/llm/agent"
-	"github.com/opencode-ai/opencode/internal/logging"
-	"github.com/opencode-ai/opencode/internal/lsp"
-	"github.com/opencode-ai/opencode/internal/message"
-	"github.com/opencode-ai/opencode/internal/permission"
-	"github.com/opencode-ai/opencode/internal/session"
-	"github.com/opencode-ai/opencode/internal/tui/theme"
+	"github.com/Krontx/oh-my-claude-code/internal/config"
+	"github.com/Krontx/oh-my-claude-code/internal/db"
+	"github.com/Krontx/oh-my-claude-code/internal/format"
+	"github.com/Krontx/oh-my-claude-code/internal/history"
+	"github.com/Krontx/oh-my-claude-code/internal/llm/agent"
+	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	"github.com/Krontx/oh-my-claude-code/internal/lsp"
+	"github.com/Krontx/oh-my-claude-code/internal/message"
+	"github.com/Krontx/oh-my-claude-code/internal/permission"
+	"github.com/Krontx/oh-my-claude-code/internal/session"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 )
 
 type App struct {

@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/diff"
-	"github.com/opencode-ai/opencode/internal/history"
-	"github.com/opencode-ai/opencode/internal/logging"
-	"github.com/opencode-ai/opencode/internal/lsp"
-	"github.com/opencode-ai/opencode/internal/permission"
+	"github.com/Krontx/oh-my-claude-code/internal/config"
+	"github.com/Krontx/oh-my-claude-code/internal/diff"
+	"github.com/Krontx/oh-my-claude-code/internal/history"
+	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	"github.com/Krontx/oh-my-claude-code/internal/lsp"
+	"github.com/Krontx/oh-my-claude-code/internal/permission"
 )
 
 type EditParams struct {

@@ -1,4 +1,4 @@
-module github.com/opencode-ai/opencode
+module github.com/Krontx/oh-my-claude-code
 
 go 1.24.0
 

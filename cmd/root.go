@@ -9,42 +9,42 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
-	"github.com/opencode-ai/opencode/internal/app"
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/db"
-	"github.com/opencode-ai/opencode/internal/format"
-	"github.com/opencode-ai/opencode/internal/llm/agent"
-	"github.com/opencode-ai/opencode/internal/logging"
-	"github.com/opencode-ai/opencode/internal/pubsub"
-	"github.com/opencode-ai/opencode/internal/tui"
-	"github.com/opencode-ai/opencode/internal/version"
+	"github.com/Krontx/oh-my-claude-code/internal/app"
+	"github.com/Krontx/oh-my-claude-code/internal/config"
+	"github.com/Krontx/oh-my-claude-code/internal/db"
+	"github.com/Krontx/oh-my-claude-code/internal/format"
+	"github.com/Krontx/oh-my-claude-code/internal/llm/agent"
+	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
+	"github.com/Krontx/oh-my-claude-code/internal/tui"
+	"github.com/Krontx/oh-my-claude-code/internal/version"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "opencode",
-	Short: "Terminal-based AI assistant for software development",
-	Long: `OpenCode is a powerful terminal-based AI assistant that helps with software development tasks.
-It provides an interactive chat interface with AI capabilities, code analysis, and LSP integration
-to assist developers in writing, debugging, and understanding code directly from the terminal.`,
+	Use:   "omcc",
+	Short: "Claude Code's brain, OpenCode's beauty — a polished TUI for Claude Code",
+	Long: `oh-my-claude-code (omcc) wraps Claude Code's full agent engine in OpenCode's
+beautiful Bubble Tea TUI. You get Claude Code's complete capabilities — tools, hooks,
+MCP servers, custom agents, plan mode — rendered in a polished terminal interface.`,
 	Example: `
   # Run in interactive mode
-  opencode
+  omcc
 
   # Run with debug logging
-  opencode -d
+  omcc -d
 
   # Run with debug logging in a specific directory
-  opencode -d -c /path/to/project
+  omcc -d -c /path/to/project
 
   # Print version
-  opencode -v
+  omcc -v
 
   # Run a single non-interactive prompt
-  opencode -p "Explain the use of context in Go"
+  omcc -p "Explain the use of context in Go"
 
   # Run a single non-interactive prompt with JSON output format
-  opencode -p "Explain the use of context in Go" -f json
+  omcc -p "Explain the use of context in Go" -f json
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// If the help flag is set, show the help message

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencode-ai/opencode/internal/llm/models"
-	"github.com/opencode-ai/opencode/internal/llm/tools"
-	"github.com/opencode-ai/opencode/internal/message"
+	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
+	"github.com/Krontx/oh-my-claude-code/internal/llm/tools"
+	"github.com/Krontx/oh-my-claude-code/internal/message"
 )
 
 type EventType string
@@ -159,6 +159,11 @@ func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption
 		return &baseProvider[OpenAIClient]{
 			options: clientOptions,
 			client:  newOpenAIClient(clientOptions),
+		}, nil
+	case models.ProviderClaudeCode:
+		return &baseProvider[ClaudeCodeClient]{
+			options: clientOptions,
+			client:  newClaudeCodeClient(clientOptions),
 		}, nil
 	case models.ProviderMock:
 		// TODO: implement mock client for test

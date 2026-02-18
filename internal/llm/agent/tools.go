@@ -3,12 +3,12 @@ package agent
 import (
 	"context"
 
-	"github.com/opencode-ai/opencode/internal/history"
-	"github.com/opencode-ai/opencode/internal/llm/tools"
-	"github.com/opencode-ai/opencode/internal/lsp"
-	"github.com/opencode-ai/opencode/internal/message"
-	"github.com/opencode-ai/opencode/internal/permission"
-	"github.com/opencode-ai/opencode/internal/session"
+	"github.com/Krontx/oh-my-claude-code/internal/history"
+	"github.com/Krontx/oh-my-claude-code/internal/llm/tools"
+	"github.com/Krontx/oh-my-claude-code/internal/lsp"
+	"github.com/Krontx/oh-my-claude-code/internal/message"
+	"github.com/Krontx/oh-my-claude-code/internal/permission"
+	"github.com/Krontx/oh-my-claude-code/internal/session"
 )
 
 func CoderAgentTools(

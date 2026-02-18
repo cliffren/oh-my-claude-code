@@ -5,12 +5,12 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/opencode-ai/opencode/internal/logging"
-	utilComponents "github.com/opencode-ai/opencode/internal/tui/components/util"
-	"github.com/opencode-ai/opencode/internal/tui/layout"
-	"github.com/opencode-ai/opencode/internal/tui/styles"
-	"github.com/opencode-ai/opencode/internal/tui/theme"
-	"github.com/opencode-ai/opencode/internal/tui/util"
+	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	utilComponents "github.com/Krontx/oh-my-claude-code/internal/tui/components/util"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/layout"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
 )
 
 type CompletionItem struct {

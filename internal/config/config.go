@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/opencode-ai/opencode/internal/llm/models"
-	"github.com/opencode-ai/opencode/internal/logging"
+	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
+	"github.com/Krontx/oh-my-claude-code/internal/logging"
 	"github.com/spf13/viper"
 )
 
@@ -98,9 +99,9 @@ type Config struct {
 
 // Application constants
 const (
-	defaultDataDirectory = ".opencode"
+	defaultDataDirectory = ".omcc"
 	defaultLogLevel      = "info"
-	appName              = "opencode"
+	appName              = "omcc"
 
 	MaxTokensFallbackDefault = 4096
 )
@@ -117,6 +118,8 @@ var defaultContextPaths = []string{
 	"OpenCode.local.md",
 	"OPENCODE.md",
 	"OPENCODE.local.md",
+	"omcc.md",
+	"omcc.local.md",
 }
 
 // Global configuration instance
@@ -295,6 +298,16 @@ func setProviderDefaults() {
 	// 8. Azure
 	// 9. Google Cloud VertexAI
 
+	// Claude Code configuration (highest priority for oh-my-claude-code)
+	if hasClaudeCode() {
+		viper.SetDefault("providers.claude-code.apiKey", "claude-code-cli")
+		viper.SetDefault("agents.coder.model", models.ClaudeCodeSonnet)
+		viper.SetDefault("agents.summarizer.model", models.ClaudeCodeHaiku)
+		viper.SetDefault("agents.task.model", models.ClaudeCodeHaiku)
+		viper.SetDefault("agents.title.model", models.ClaudeCodeHaiku)
+		return
+	}
+
 	// copilot configuration
 	if key := viper.GetString("providers.copilot.apiKey"); strings.TrimSpace(key) != "" {
 		viper.SetDefault("agents.coder.model", models.CopilotGPT4o)
@@ -420,6 +433,19 @@ func hasVertexAICredentials() bool {
 	}
 	// Check for Google Cloud project and location
 	if os.Getenv("GOOGLE_CLOUD_PROJECT") != "" && (os.Getenv("GOOGLE_CLOUD_REGION") != "" || os.Getenv("GOOGLE_CLOUD_LOCATION") != "") {
+		return true
+	}
+	return false
+}
+
+// hasClaudeCode checks if the Claude Code CLI is available.
+func hasClaudeCode() bool {
+	// Check explicit env var
+	if os.Getenv("CLAUDE_CODE_PATH") != "" {
+		return true
+	}
+	// Check if claude binary is in PATH
+	if _, err := exec.LookPath("claude"); err == nil {
 		return true
 	}
 	return false
@@ -620,6 +646,9 @@ func Validate() error {
 
 	// Validate providers
 	for provider, providerCfg := range cfg.Providers {
+		if provider == models.ProviderClaudeCode {
+			continue // Claude Code uses CLI, not API key
+		}
 		if providerCfg.APIKey == "" && !providerCfg.Disabled {
 			fmt.Printf("provider has no API key, marking as disabled %s", provider)
 			logging.Warn("provider has no API key, marking as disabled", "provider", provider)
@@ -663,12 +692,27 @@ func getProviderAPIKey(provider models.ModelProvider) string {
 		if hasVertexAICredentials() {
 			return "vertex-ai-credentials-available"
 		}
+	case models.ProviderClaudeCode:
+		if hasClaudeCode() {
+			return "claude-code-cli"
+		}
 	}
 	return ""
 }
 
 // setDefaultModelForAgent sets a default model for an agent based on available providers
 func setDefaultModelForAgent(agent AgentName) bool {
+	if hasClaudeCode() {
+		maxTokens := int64(16384)
+		if agent == AgentTitle {
+			maxTokens = 80
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     models.ClaudeCodeSonnet,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
 	if hasCopilotCredentials() {
 		maxTokens := int64(5000)
 		if agent == AgentTitle {
