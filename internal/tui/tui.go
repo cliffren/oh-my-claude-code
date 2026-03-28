@@ -2,7 +2,10 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -1101,9 +1104,12 @@ If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (
 		}
 	}
 
-	// Register internal slash commands (TUI handles these directly).
-	// CLI commands will be added dynamically from the init event.
+	// Load slash commands: cached from previous session + internal commands.
+	// Will be updated dynamically when init event arrives.
 	model.slashCommands = internalSlashCommands()
+	if cached := loadCachedInitData(); cached != nil {
+		model.updateSlashCommandsFromInit(cached)
+	}
 
 	return model
 }
@@ -1145,8 +1151,8 @@ func (a *appModel) updateSlashCommandsFromInit(initData *provider.InitData) {
 		}
 		name := cmdName
 		cmds = append(cmds, dialog.Command{
-			ID:    "cc-" + name,
-			Title: "/" + name,
+			ID:          "cc-" + name,
+			Title:       "/" + name,
 			Description: "Claude Code: /" + name,
 			Handler: func(cmd dialog.Command) tea.Cmd {
 				return util.CmdHandler(chat.SendMsg{Text: "/" + name})
@@ -1155,4 +1161,35 @@ func (a *appModel) updateSlashCommandsFromInit(initData *provider.InitData) {
 	}
 
 	a.slashCommands = cmds
+
+	// Cache for next startup
+	saveCachedInitData(initData)
+}
+
+const initCacheFile = "init_cache.json"
+
+func initCachePath() string {
+	return filepath.Join(config.WorkingDirectory(), ".omcc", initCacheFile)
+}
+
+func loadCachedInitData() *provider.InitData {
+	data, err := os.ReadFile(initCachePath())
+	if err != nil {
+		return nil
+	}
+	var initData provider.InitData
+	if err := json.Unmarshal(data, &initData); err != nil {
+		return nil
+	}
+	return &initData
+}
+
+func saveCachedInitData(initData *provider.InitData) {
+	path := initCachePath()
+	os.MkdirAll(filepath.Dir(path), 0755)
+	data, err := json.Marshal(initData)
+	if err != nil {
+		return
+	}
+	os.WriteFile(path, data, 0644)
 }
