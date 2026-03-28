@@ -93,8 +93,8 @@ var keys = keyMap{
 	),
 
 	PermissionMode: key.NewBinding(
-		key.WithKeys("ctrl+m"),
-		key.WithHelp("ctrl+m", "permission mode"),
+		key.WithKeys("ctrl+\\"),
+		key.WithHelp("ctrl+\\", "permission mode"),
 	),
 }
 
