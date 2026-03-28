@@ -59,11 +59,12 @@ type Provider interface {
 }
 
 type providerClientOptions struct {
-	apiKey          string
-	model           models.Model
-	maxTokens       int64
-	systemMessage   string
-	reasoningEffort string
+	apiKey              string
+	model               models.Model
+	maxTokens           int64
+	systemMessage       string
+	appendSystemMessage bool
+	reasoningEffort     string
 
 	anthropicOptions []AnthropicOption
 	openaiOptions    []OpenAIOption
@@ -137,7 +138,7 @@ func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption
 		clientOptions.openaiOptions = append(clientOptions.openaiOptions,
 			WithOpenAIBaseURL("https://openrouter.ai/api/v1"),
 			WithOpenAIExtraHeaders(map[string]string{
-				"HTTP-Referer": "opencode.ai",
+				"HTTP-Referer": "https://github.com/Krontx/oh-my-claude-code",
 				"X-Title":      "omcc",
 			}),
 		)
@@ -219,6 +220,12 @@ func WithMaxTokens(maxTokens int64) ProviderClientOption {
 func WithSystemMessage(systemMessage string) ProviderClientOption {
 	return func(options *providerClientOptions) {
 		options.systemMessage = systemMessage
+	}
+}
+
+func WithAppendSystemMessage(append bool) ProviderClientOption {
+	return func(options *providerClientOptions) {
+		options.appendSystemMessage = append
 	}
 }
 

@@ -109,6 +109,14 @@ func (c *claudeCodeClient) buildCommand(ctx context.Context) *exec.Cmd {
 		args = append(args, "--effort", c.providerOptions.reasoningEffort)
 	}
 
+	if c.providerOptions.systemMessage != "" {
+		if c.providerOptions.appendSystemMessage {
+			args = append(args, "--append-system-prompt", c.providerOptions.systemMessage)
+		} else {
+			args = append(args, "--system-prompt", c.providerOptions.systemMessage)
+		}
+	}
+
 	c.mu.Lock()
 	sid := c.sessionID
 	c.mu.Unlock()

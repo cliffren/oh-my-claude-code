@@ -8,10 +8,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/Krontx/oh-my-claude-code/internal/app"
 	"github.com/Krontx/oh-my-claude-code/internal/logging"
 	"github.com/Krontx/oh-my-claude-code/internal/message"
@@ -21,6 +17,10 @@ import (
 	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textarea"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type editorCmp struct {
@@ -143,6 +143,10 @@ func (m *editorCmp) send() tea.Cmd {
 func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		// Consume all mouse events — don't let them reach the textarea.
+		// The editor doesn't need mouse scroll; click just keeps focus.
+		return m, nil
 	case dialog.ThemeChangedMsg:
 		m.textarea = CreateTextArea(&m.textarea)
 	case dialog.CompletionSelectedMsg:
@@ -163,6 +167,9 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.attachments = append(m.attachments, msg.Attachment)
 	case tea.KeyMsg:
+		if isMouseProtocolArtifact(msg) {
+			return m, nil
+		}
 		if key.Matches(msg, DeleteKeyMaps.AttachmentDeleteMode) {
 			m.deleteMode = true
 			return m, nil
@@ -243,9 +250,8 @@ func (m *editorCmp) View() string {
 func (m *editorCmp) SetSize(width, height int) tea.Cmd {
 	m.width = width
 	m.height = height
-	m.textarea.SetWidth(width - 3) // account for the prompt and padding right
+	m.textarea.SetWidth(width - 3) // account for prompt ">" and left padding
 	m.textarea.SetHeight(height)
-	m.textarea.SetWidth(width)
 	return nil
 }
 
@@ -319,4 +325,74 @@ func NewEditorCmp(app *app.App) tea.Model {
 		app:      app,
 		textarea: ta,
 	}
+}
+
+func isMouseProtocolArtifact(msg tea.KeyMsg) bool {
+	rawCandidates := []string{string(msg.Runes), msg.String()}
+	for _, raw := range rawCandidates {
+		if raw == "" {
+			continue
+		}
+		if containsMouseProtocolArtifact(raw) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsMouseProtocolArtifact detects SGR mouse escape sequences that leak
+// through as KeyMsg. Handles full sequences ([<65;42;29m), concatenated
+// sequences from rapid scrolling, and partial fragments.
+func containsMouseProtocolArtifact(raw string) bool {
+	raw = strings.TrimPrefix(raw, "\x1b")
+
+	// Check for full/concatenated SGR mouse sequences: [<N;N;N(m|M)
+	s := raw
+	for {
+		idx := strings.Index(s, "[<")
+		if idx < 0 {
+			break
+		}
+		s = s[idx+2:]
+		if matchSGRBody(s) {
+			return true
+		}
+	}
+
+	// Check for partial fragments that result from split parsing.
+	// These are the remaining chars after ESC is consumed separately:
+	// e.g. "<65;42;29m" or "65;42;29m" or just ";42;29m"
+	if len(raw) >= 3 {
+		// Starts with < followed by digits and semicolons
+		if raw[0] == '<' && matchSGRBody(raw[1:]) {
+			return true
+		}
+		// Just digits;digits;digits(m|M) — the [< was consumed earlier
+		if matchSGRBody(raw) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func matchSGRBody(s string) bool {
+	i := 0
+	semicolons := 0
+	hasDigit := false
+	for i < len(s) {
+		ch := s[i]
+		if ch >= '0' && ch <= '9' {
+			hasDigit = true
+			i++
+		} else if ch == ';' {
+			semicolons++
+			i++
+		} else if (ch == 'm' || ch == 'M') && semicolons == 2 && hasDigit {
+			return true
+		} else {
+			return false
+		}
+	}
+	return false
 }

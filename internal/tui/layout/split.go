@@ -1,10 +1,10 @@
 package layout
 
 import (
+	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 )
 
 type SplitPaneLayout interface {
@@ -56,6 +56,8 @@ func (s *splitPaneLayout) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		return s, s.SetSize(msg.Width, msg.Height)
+	case tea.MouseMsg:
+		return s.updateMouse(msg)
 	}
 
 	if s.rightPanel != nil {
@@ -85,30 +87,101 @@ func (s *splitPaneLayout) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, tea.Batch(cmds...)
 }
 
-func (s *splitPaneLayout) View() string {
-	var topSection string
-
-	if s.leftPanel != nil && s.rightPanel != nil {
-		leftView := s.leftPanel.View()
-		rightView := s.rightPanel.View()
-		topSection = lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
-	} else if s.leftPanel != nil {
-		topSection = s.leftPanel.View()
-	} else if s.rightPanel != nil {
-		topSection = s.rightPanel.View()
-	} else {
-		topSection = ""
+func (s *splitPaneLayout) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if target := s.capturedPanel(); target != nil {
+		translated := s.translateMouseForPanel(target, msg)
+		updated, cmd := target.Update(translated)
+		s.assignUpdatedPanel(target, updated.(Container))
+		return s, cmd
 	}
 
+	var target Container
+	var translated tea.MouseMsg
+
+	topHeight, bottomHeight := s.sectionHeights()
+	leftWidth, rightWidth := s.sectionWidths()
+
+	bottomWidth := leftWidth
+	if s.rightPanel == nil {
+		bottomWidth = s.width
+	}
+	if s.bottomPanel != nil && msg.Y >= topHeight && msg.Y < topHeight+bottomHeight && msg.X < bottomWidth {
+		target = s.bottomPanel
+		translated = msg
+		translated.Y -= topHeight
+	} else if s.leftPanel != nil && msg.X < leftWidth && msg.Y < topHeight {
+		target = s.leftPanel
+		translated = msg
+	} else if s.rightPanel != nil && msg.X >= leftWidth && msg.X < leftWidth+rightWidth {
+		target = s.rightPanel
+		translated = msg
+		translated.X -= leftWidth
+	} else {
+		return s, nil
+	}
+
+	updated, cmd := target.Update(translated)
+	s.assignUpdatedPanel(target, updated.(Container))
+	return s, cmd
+}
+
+func (s *splitPaneLayout) capturedPanel() Container {
+	for _, panel := range []Container{s.leftPanel, s.rightPanel, s.bottomPanel} {
+		if panel != nil && panel.CapturesMouse() {
+			return panel
+		}
+	}
+	return nil
+}
+
+func (s *splitPaneLayout) translateMouseForPanel(target Container, msg tea.MouseMsg) tea.MouseMsg {
+	translated := msg
+	topHeight, _ := s.sectionHeights()
+	leftWidth, _ := s.sectionWidths()
+
+	switch target {
+	case s.rightPanel:
+		translated.X -= leftWidth
+	case s.bottomPanel:
+		translated.Y -= topHeight
+	}
+
+	return translated
+}
+
+func (s *splitPaneLayout) View() string {
 	var finalView string
 
-	if s.bottomPanel != nil && topSection != "" {
+	hasLeft := s.leftPanel != nil
+	hasRight := s.rightPanel != nil
+	hasBottom := s.bottomPanel != nil
+
+	if hasLeft && hasRight && hasBottom {
+		// Layout: left column (messages + editor) | right column (sidebar full height)
+		leftView := s.leftPanel.View()
+		rightView := s.rightPanel.View()
 		bottomView := s.bottomPanel.View()
-		finalView = lipgloss.JoinVertical(lipgloss.Left, topSection, bottomView)
-	} else if s.bottomPanel != nil {
-		finalView = s.bottomPanel.View()
+
+		leftCol := lipgloss.JoinVertical(lipgloss.Left, leftView, bottomView)
+		finalView = lipgloss.JoinHorizontal(lipgloss.Top, leftCol, rightView)
 	} else {
-		finalView = topSection
+		// Standard layout: top section (left | right) over bottom
+		var topSection string
+		if hasLeft && hasRight {
+			topSection = lipgloss.JoinHorizontal(lipgloss.Top, s.leftPanel.View(), s.rightPanel.View())
+		} else if hasLeft {
+			topSection = s.leftPanel.View()
+		} else if hasRight {
+			topSection = s.rightPanel.View()
+		}
+
+		if hasBottom && topSection != "" {
+			finalView = lipgloss.JoinVertical(lipgloss.Left, topSection, s.bottomPanel.View())
+		} else if hasBottom {
+			finalView = s.bottomPanel.View()
+		} else {
+			finalView = topSection
+		}
 	}
 
 	if finalView != "" {
@@ -129,26 +202,8 @@ func (s *splitPaneLayout) SetSize(width, height int) tea.Cmd {
 	s.width = width
 	s.height = height
 
-	var topHeight, bottomHeight int
-	if s.bottomPanel != nil {
-		topHeight = int(float64(height) * s.verticalRatio)
-		bottomHeight = height - topHeight
-	} else {
-		topHeight = height
-		bottomHeight = 0
-	}
-
-	var leftWidth, rightWidth int
-	if s.leftPanel != nil && s.rightPanel != nil {
-		leftWidth = int(float64(width) * s.ratio)
-		rightWidth = width - leftWidth
-	} else if s.leftPanel != nil {
-		leftWidth = width
-		rightWidth = 0
-	} else if s.rightPanel != nil {
-		leftWidth = 0
-		rightWidth = width
-	}
+	topHeight, bottomHeight := s.sectionHeights()
+	leftWidth, rightWidth := s.sectionWidths()
 
 	var cmds []tea.Cmd
 	if s.leftPanel != nil {
@@ -157,15 +212,57 @@ func (s *splitPaneLayout) SetSize(width, height int) tea.Cmd {
 	}
 
 	if s.rightPanel != nil {
-		cmd := s.rightPanel.SetSize(rightWidth, topHeight)
+		// When bottom panel exists, right panel extends full height
+		rightHeight := topHeight
+		if s.bottomPanel != nil {
+			rightHeight = height
+		}
+		cmd := s.rightPanel.SetSize(rightWidth, rightHeight)
 		cmds = append(cmds, cmd)
 	}
 
 	if s.bottomPanel != nil {
-		cmd := s.bottomPanel.SetSize(width, bottomHeight)
+		bottomWidth := leftWidth
+		if s.rightPanel == nil {
+			bottomWidth = width
+		}
+		cmd := s.bottomPanel.SetSize(bottomWidth, bottomHeight)
 		cmds = append(cmds, cmd)
 	}
 	return tea.Batch(cmds...)
+}
+
+func (s *splitPaneLayout) sectionHeights() (int, int) {
+	if s.bottomPanel != nil {
+		topHeight := int(float64(s.height) * s.verticalRatio)
+		return topHeight, s.height - topHeight
+	}
+	return s.height, 0
+}
+
+func (s *splitPaneLayout) sectionWidths() (int, int) {
+	if s.leftPanel != nil && s.rightPanel != nil {
+		leftWidth := int(float64(s.width) * s.ratio)
+		return leftWidth, s.width - leftWidth
+	}
+	if s.leftPanel != nil {
+		return s.width, 0
+	}
+	if s.rightPanel != nil {
+		return 0, s.width
+	}
+	return 0, 0
+}
+
+func (s *splitPaneLayout) assignUpdatedPanel(target Container, updated Container) {
+	switch target {
+	case s.leftPanel:
+		s.leftPanel = updated
+	case s.rightPanel:
+		s.rightPanel = updated
+	case s.bottomPanel:
+		s.bottomPanel = updated
+	}
 }
 
 func (s *splitPaneLayout) GetSize() (int, int) {

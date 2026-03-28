@@ -6,8 +6,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/Krontx/oh-my-claude-code/internal/config"
 	"github.com/Krontx/oh-my-claude-code/internal/diff"
 	"github.com/Krontx/oh-my-claude-code/internal/history"
@@ -15,12 +17,16 @@ import (
 	"github.com/Krontx/oh-my-claude-code/internal/session"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
 )
 
 type sidebarCmp struct {
 	width, height int
+	viewport      viewport.Model
 	session       session.Session
 	history       history.Service
+	selection     selectionController
+	clipboard     clipboardWriter
 	modFiles      map[string]struct {
 		additions int
 		removals  int
@@ -51,7 +57,23 @@ func (m *sidebarCmp) Init() tea.Cmd {
 }
 
 func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+			u, cmd := m.viewport.Update(msg)
+			m.viewport = u
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
+		}
+		_, _, _, err := m.selection.handleMouse(msg, m.selectionRegion(), m.visiblePlainLines(), m.clipboard)
+		if err != nil {
+			cmds = append(cmds, util.ReportError(err))
+		}
+		if m.selection.capturesMouse() || msg.Action == tea.MouseActionRelease {
+			return m, tea.Batch(cmds...)
+		}
+		return m, tea.Batch(cmds...)
 	case SessionSelectedMsg:
 		if msg.ID != m.session.ID {
 			m.session = msg
@@ -82,25 +104,29 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *sidebarCmp) View() string {
-	baseStyle := styles.BaseStyle()
+	// Build the sidebar content and set it in the viewport
+	content := lipgloss.JoinVertical(
+		lipgloss.Top,
+		header(m.width),
+		" ",
+		m.sessionSection(),
+		" ",
+		lspsConfigured(m.width),
+		" ",
+		m.modifiedFiles(),
+	)
+	m.viewport.SetContent(content)
 
-	return baseStyle.
-		Width(m.width).
-		PaddingLeft(4).
-		PaddingRight(2).
-		Height(m.height - 1).
-		Render(
-			lipgloss.JoinVertical(
-				lipgloss.Top,
-				header(m.width),
-				" ",
-				m.sessionSection(),
-				" ",
-				lspsConfigured(m.width),
-				" ",
-				m.modifiedFiles(),
-			),
-		)
+	t := theme.CurrentTheme()
+	visible := strings.Split(m.viewport.View(), "\n")
+	for len(visible) < m.viewport.Height {
+		visible = append(visible, "")
+	}
+	if m.selection.hasSelection() {
+		start, end := m.selection.bounds()
+		visible = highlightSelectedLines(visible, start, end, lipgloss.NewStyle().Background(t.BackgroundSecondary()).Foreground(t.Text()))
+	}
+	return strings.Join(visible, "\n")
 }
 
 func (m *sidebarCmp) sessionSection() string {
@@ -228,7 +254,31 @@ func (m *sidebarCmp) modifiedFiles() string {
 func (m *sidebarCmp) SetSize(width, height int) tea.Cmd {
 	m.width = width
 	m.height = height
+	m.viewport.Width = width
+	m.viewport.Height = height
 	return nil
+}
+
+func (m *sidebarCmp) CapturesMouse() bool {
+	return m.selection.capturesMouse()
+}
+
+func (m *sidebarCmp) selectionRegion() selectionRegion {
+	return selectionRegion{
+		X:      0,
+		Y:      0,
+		Width:  m.viewport.Width,
+		Height: m.viewport.Height,
+	}
+}
+
+func (m *sidebarCmp) visiblePlainLines() []string {
+	visible := strings.Split(m.viewport.View(), "\n")
+	lines := make([]string, len(visible))
+	for i, line := range visible {
+		lines[i] = ansi.Strip(line)
+	}
+	return lines
 }
 
 func (m *sidebarCmp) GetSize() (int, int) {
@@ -236,9 +286,12 @@ func (m *sidebarCmp) GetSize() (int, int) {
 }
 
 func NewSidebarCmp(session session.Session, history history.Service) tea.Model {
+	vp := viewport.New(0, 0)
 	return &sidebarCmp{
-		session: session,
-		history: history,
+		viewport:  vp,
+		session:   session,
+		history:   history,
+		clipboard: newClipboardWriter(),
 	}
 }
 

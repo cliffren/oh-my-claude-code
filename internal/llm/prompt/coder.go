@@ -14,14 +14,15 @@ import (
 )
 
 func CoderPrompt(provider models.ModelProvider) string {
-	basePrompt := baseAnthropicCoderPrompt
 	switch provider {
+	case models.ProviderClaudeCode:
+		// Pure TUI shell — let Claude Code CLI use its own system prompt.
+		return ""
 	case models.ProviderOpenAI:
-		basePrompt = baseOpenAICoderPrompt
+		return fmt.Sprintf("%s\n\n%s\n%s", baseOpenAICoderPrompt, getEnvironmentInfo(), lspInformation())
+	default:
+		return fmt.Sprintf("%s\n\n%s\n%s", baseAnthropicCoderPrompt, getEnvironmentInfo(), lspInformation())
 	}
-	envInfo := getEnvironmentInfo()
-
-	return fmt.Sprintf("%s\n\n%s\n%s", basePrompt, envInfo, lspInformation())
 }
 
 const baseOpenAICoderPrompt = `
@@ -71,9 +72,7 @@ You MUST adhere to the following criteria when executing the task:
 - Remember the user does not see the full output of tools
 `
 
-const baseAnthropicCoderPrompt = `You are omcc, a Claude Code wrapper with a polished TUI that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
-
-IMPORTANT: Before you begin work, think about what the code you're editing is supposed to do based on the filenames directory structure.
+const baseAnthropicCoderPrompt = `IMPORTANT: Before you begin work, think about what the code you're editing is supposed to do based on the filenames directory structure.
 
 # Memory
 If the current working directory contains a file called CLAUDE.md, it will be automatically added to your context. This file serves multiple purposes:

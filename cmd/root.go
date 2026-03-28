@@ -117,10 +117,12 @@ MCP servers, custom agents, plan mode — rendered in a polished terminal interf
 		// Interactive mode
 		// Set up the TUI
 		zone.NewGlobal()
+		mouseFilter := newMouseArtifactFilter()
 		program := tea.NewProgram(
 			tui.New(app),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
+			tea.WithFilter(mouseFilter.filter),
 		)
 
 		// Setup the subscriptions, this will send services events to the TUI

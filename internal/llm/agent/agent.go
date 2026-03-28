@@ -156,30 +156,44 @@ func (a *agent) generateTitle(ctx context.Context, sessionID string, content str
 	if content == "" {
 		return nil
 	}
-	if a.titleProvider == nil {
-		return nil
-	}
 	session, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return err
 	}
-	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
-	parts := []message.ContentPart{message.TextContent{Text: content}}
-	response, err := a.titleProvider.SendMessages(
-		ctx,
-		[]message.Message{
-			{
-				Role:  message.User,
-				Parts: parts,
+
+	var title string
+
+	if a.titleProvider != nil {
+		ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
+		parts := []message.ContentPart{message.TextContent{Text: content}}
+		response, err := a.titleProvider.SendMessages(
+			ctx,
+			[]message.Message{
+				{
+					Role:  message.User,
+					Parts: parts,
+				},
 			},
-		},
-		make([]tools.BaseTool, 0),
-	)
-	if err != nil {
-		return err
+			make([]tools.BaseTool, 0),
+		)
+		if err == nil && response.Content != "" {
+			title = strings.TrimSpace(strings.ReplaceAll(response.Content, "\n", " "))
+		}
 	}
 
-	title := strings.TrimSpace(strings.ReplaceAll(response.Content, "\n", " "))
+	// Fallback: use the user's message as the title if the provider
+	// returned nothing or an overly long response (e.g. Claude Code CLI
+	// doesn't honour the title system prompt properly).
+	if title == "" || len([]rune(title)) > 80 {
+		title = strings.TrimSpace(strings.ReplaceAll(content, "\n", " "))
+	}
+
+	// Hard cap at 50 characters
+	runes := []rune(title)
+	if len(runes) > 50 {
+		title = string(runes[:47]) + "..."
+	}
+
 	if title == "" {
 		return nil
 	}
@@ -746,6 +760,13 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 		provider.WithModel(model),
 		provider.WithSystemMessage(prompt.GetAgentPrompt(agentName, model.Provider)),
 		provider.WithMaxTokens(maxTokens),
+	}
+	// For Claude Code provider: coder/task agents append to CLI's own system
+	// prompt; title/summarizer agents replace it entirely.
+	if model.Provider == models.ProviderClaudeCode {
+		if agentName == config.AgentCoder || agentName == config.AgentTask {
+			opts = append(opts, provider.WithAppendSystemMessage(true))
+		}
 	}
 	if model.Provider == models.ProviderOpenAI || model.Provider == models.ProviderLocal && model.CanReason {
 		opts = append(
