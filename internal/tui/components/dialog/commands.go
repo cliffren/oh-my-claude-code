@@ -1,10 +1,12 @@
 package dialog
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	utilComponents "github.com/Krontx/oh-my-claude-code/internal/tui/components/util"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/layout"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
@@ -16,6 +18,7 @@ type Command struct {
 	ID          string
 	Title       string
 	Description string
+	Category    string
 	Handler     func(cmd Command) tea.Cmd
 }
 
@@ -62,91 +65,203 @@ type CommandDialog interface {
 }
 
 type commandDialogCmp struct {
-	listView utilComponents.SimpleList[Command]
-	width    int
-	height   int
+	searchInput  textinput.Model
+	allCommands  []Command
+	filtered     []Command
+	selectedIdx  int
+	maxVisible   int
+	width        int
+	height       int
 }
 
 type commandKeyMap struct {
 	Enter  key.Binding
 	Escape key.Binding
+	Up     key.Binding
+	Down   key.Binding
 }
 
 var commandKeys = commandKeyMap{
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
-		key.WithHelp("enter", "select command"),
+		key.WithHelp("enter", "select"),
 	),
 	Escape: key.NewBinding(
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "close"),
 	),
+	Up: key.NewBinding(
+		key.WithKeys("up"),
+	),
+	Down: key.NewBinding(
+		key.WithKeys("down"),
+	),
 }
 
 func (c *commandDialogCmp) Init() tea.Cmd {
-	return c.listView.Init()
+	return textinput.Blink
 }
 
 func (c *commandDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, commandKeys.Enter):
-			selectedItem, idx := c.listView.GetSelectedItem()
-			if idx != -1 {
+			if c.selectedIdx >= 0 && c.selectedIdx < len(c.filtered) {
 				return c, util.CmdHandler(CommandSelectedMsg{
-					Command: selectedItem,
+					Command: c.filtered[c.selectedIdx],
 				})
 			}
 		case key.Matches(msg, commandKeys.Escape):
 			return c, util.CmdHandler(CloseCommandDialogMsg{})
+		case key.Matches(msg, commandKeys.Up):
+			if c.selectedIdx > 0 {
+				c.selectedIdx--
+			}
+			return c, nil
+		case key.Matches(msg, commandKeys.Down):
+			if c.selectedIdx < len(c.filtered)-1 {
+				c.selectedIdx++
+			}
+			return c, nil
 		}
 	case tea.WindowSizeMsg:
 		c.width = msg.Width
 		c.height = msg.Height
 	}
 
-	u, cmd := c.listView.Update(msg)
-	c.listView = u.(utilComponents.SimpleList[Command])
-	cmds = append(cmds, cmd)
+	// Update search input
+	prevValue := c.searchInput.Value()
+	var cmd tea.Cmd
+	c.searchInput, cmd = c.searchInput.Update(msg)
 
-	return c, tea.Batch(cmds...)
+	// Re-filter if query changed
+	if c.searchInput.Value() != prevValue {
+		c.applyFilter()
+	}
+
+	return c, cmd
+}
+
+func (c *commandDialogCmp) applyFilter() {
+	query := strings.ToLower(strings.TrimSpace(c.searchInput.Value()))
+	if query == "" {
+		c.filtered = c.allCommands
+	} else {
+		words := strings.Fields(query)
+		c.filtered = make([]Command, 0)
+		for _, cmd := range c.allCommands {
+			target := strings.ToLower(cmd.Title + " " + cmd.Description + " " + cmd.Category)
+			match := true
+			for _, w := range words {
+				if !strings.Contains(target, w) {
+					match = false
+					break
+				}
+			}
+			if match {
+				c.filtered = append(c.filtered, cmd)
+			}
+		}
+	}
+	c.selectedIdx = 0
 }
 
 func (c *commandDialogCmp) View() string {
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 
-	maxWidth := 40
+	maxWidth := 50
 
-	commands := c.listView.GetItems()
-
-	for _, cmd := range commands {
-		if len(cmd.Title) > maxWidth-4 {
-			maxWidth = len(cmd.Title) + 4
+	for _, cmd := range c.filtered {
+		w := len(cmd.Title) + 4
+		if w > maxWidth {
+			maxWidth = w
 		}
 		if cmd.Description != "" {
-			if len(cmd.Description) > maxWidth-4 {
-				maxWidth = len(cmd.Description) + 4
+			w = len(cmd.Description) + 4
+			if w > maxWidth {
+				maxWidth = w
 			}
 		}
 	}
+	if maxWidth > 60 {
+		maxWidth = 60
+	}
 
-	c.listView.SetMaxWidth(maxWidth)
-
-	title := baseStyle.
-		Foreground(t.Primary()).
-		Bold(true).
+	// Search input
+	c.searchInput.Width = maxWidth - 4
+	searchBox := baseStyle.
 		Width(maxWidth).
 		Padding(0, 1).
-		Render("Commands")
+		Render(c.searchInput.View())
+
+	// Build list with category headers
+	maxVisible := c.maxVisible
+	if maxVisible > len(c.filtered) {
+		maxVisible = len(c.filtered)
+	}
+
+	// Calculate scroll window
+	startIdx := 0
+	if len(c.filtered) > maxVisible {
+		halfVisible := maxVisible / 2
+		if c.selectedIdx >= halfVisible && c.selectedIdx < len(c.filtered)-halfVisible {
+			startIdx = c.selectedIdx - halfVisible
+		} else if c.selectedIdx >= len(c.filtered)-halfVisible {
+			startIdx = len(c.filtered) - maxVisible
+		}
+	}
+	endIdx := startIdx + maxVisible
+	if endIdx > len(c.filtered) {
+		endIdx = len(c.filtered)
+	}
+
+	listItems := make([]string, 0)
+	lastCategory := ""
+	for i := startIdx; i < endIdx; i++ {
+		cmd := c.filtered[i]
+		// Category header
+		if cmd.Category != "" && cmd.Category != lastCategory {
+			lastCategory = cmd.Category
+			header := baseStyle.
+				Width(maxWidth).
+				Foreground(t.TextMuted()).
+				Bold(true).
+				Padding(0, 1).
+				Render("── " + cmd.Category + " ──")
+			listItems = append(listItems, header)
+		}
+		listItems = append(listItems, cmd.Render(i == c.selectedIdx, maxWidth))
+	}
+
+	listContent := ""
+	if len(c.filtered) == 0 {
+		listContent = baseStyle.
+			Width(maxWidth).
+			Foreground(t.TextMuted()).
+			Padding(0, 1).
+			Render("No matching commands")
+	} else {
+		listContent = lipgloss.JoinVertical(lipgloss.Left, listItems...)
+	}
+
+	// Count display
+	countText := ""
+	if c.searchInput.Value() != "" {
+		countText = baseStyle.
+			Width(maxWidth).
+			Foreground(t.TextMuted()).
+			Padding(0, 1).
+			Render(strings.Repeat(" ", 0) + string(rune('0'+len(c.filtered)/100%10)) + string(rune('0'+len(c.filtered)/10%10)) + string(rune('0'+len(c.filtered)%10)))
+	}
+	_ = countText
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
-		title,
+		searchBox,
 		baseStyle.Width(maxWidth).Render(""),
-		baseStyle.Width(maxWidth).Render(c.listView.View()),
+		listContent,
 		baseStyle.Width(maxWidth).Render(""),
 	)
 
@@ -163,18 +278,25 @@ func (c *commandDialogCmp) BindingKeys() []key.Binding {
 }
 
 func (c *commandDialogCmp) SetCommands(commands []Command) {
-	c.listView.SetItems(commands)
+	c.allCommands = commands
+	c.searchInput.SetValue("")
+	c.applyFilter()
 }
 
 // NewCommandDialogCmp creates a new command selection dialog
 func NewCommandDialogCmp() CommandDialog {
-	listView := utilComponents.NewSimpleList[Command](
-		[]Command{},
-		10,
-		"No commands available",
-		true,
-	)
+	ti := textinput.New()
+	ti.Placeholder = "Type to search..."
+	ti.Focus()
+	ti.CharLimit = 50
+
+	t := theme.CurrentTheme()
+	ti.PromptStyle = lipgloss.NewStyle().Foreground(t.Primary())
+	ti.TextStyle = lipgloss.NewStyle().Foreground(t.Text())
+	ti.Prompt = "> "
+
 	return &commandDialogCmp{
-		listView: listView,
+		searchInput: ti,
+		maxVisible:  12,
 	}
 }

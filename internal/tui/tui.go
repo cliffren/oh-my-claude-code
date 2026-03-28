@@ -69,8 +69,8 @@ var keys = keyMap{
 	),
 
 	Commands: key.NewBinding(
-		key.WithKeys("ctrl+k"),
-		key.WithHelp("ctrl+k", "commands"),
+		key.WithKeys("ctrl+k", "ctrl+p"),
+		key.WithHelp("ctrl+p", "commands"),
 	),
 	Filepicker: key.NewBinding(
 		key.WithKeys("ctrl+f"),
@@ -587,11 +587,10 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		case key.Matches(msg, keys.Commands):
 			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showThemeDialog && !a.showFilepicker {
-				// Show commands dialog
-				if len(a.commands) == 0 {
-					return a, util.ReportWarn("No commands available")
-				}
-				a.commandDialog.SetCommands(a.commands)
+				allCmds := make([]dialog.Command, len(a.commands))
+				copy(allCmds, a.commands)
+				allCmds = append(allCmds, a.slashCommands...)
+				a.commandDialog.SetCommands(allCmds)
 				a.showCommandDialog = true
 				return a, nil
 			}
@@ -1116,25 +1115,39 @@ If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (
 
 func internalSlashCommands() []dialog.Command {
 	return []dialog.Command{
-		{ID: "model", Title: "/model", Description: "Switch AI model", Handler: func(cmd dialog.Command) tea.Cmd {
+		{ID: "model", Title: "/model", Description: "Switch AI model", Category: "TUI", Handler: func(cmd dialog.Command) tea.Cmd {
 			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "model"})
 		}},
-		{ID: "sessions", Title: "/sessions", Description: "Switch session", Handler: func(cmd dialog.Command) tea.Cmd {
+		{ID: "sessions", Title: "/sessions", Description: "Switch session", Category: "TUI", Handler: func(cmd dialog.Command) tea.Cmd {
 			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "sessions"})
 		}},
-		{ID: "theme", Title: "/theme", Description: "Switch theme", Handler: func(cmd dialog.Command) tea.Cmd {
+		{ID: "theme", Title: "/theme", Description: "Switch theme", Category: "TUI", Handler: func(cmd dialog.Command) tea.Cmd {
 			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "theme"})
 		}},
-		{ID: "effort", Title: "/effort", Description: "Set reasoning effort level", Handler: func(cmd dialog.Command) tea.Cmd {
+		{ID: "effort", Title: "/effort", Description: "Set reasoning effort level", Category: "TUI", Handler: func(cmd dialog.Command) tea.Cmd {
 			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "effort"})
 		}},
-		{ID: "new", Title: "/new", Description: "Start a new session", Handler: func(cmd dialog.Command) tea.Cmd {
+		{ID: "new", Title: "/new", Description: "Start a new session", Category: "TUI", Handler: func(cmd dialog.Command) tea.Cmd {
 			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "new"})
 		}},
-		{ID: "help", Title: "/help", Description: "Show help", Handler: func(cmd dialog.Command) tea.Cmd {
+		{ID: "help", Title: "/help", Description: "Show help", Category: "TUI", Handler: func(cmd dialog.Command) tea.Cmd {
 			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "help"})
 		}},
 	}
+}
+
+var cliCommandDescriptions = map[string]string{
+	"compact":         "Compact conversation context",
+	"review":          "Review code changes",
+	"cost":            "Show session cost and token usage",
+	"context":         "Show context window usage",
+	"init":            "Initialize CLAUDE.md for project",
+	"pr-comments":     "Review PR comments",
+	"security-review": "Security review of code",
+	"release-notes":   "Generate release notes",
+	"insights":        "Show usage insights",
+	"heapdump":        "Dump heap for debugging",
+	"extra-usage":     "Show extra usage info",
 }
 
 func (a *appModel) updateSlashCommandsFromInit(initData *provider.InitData) {
@@ -1150,10 +1163,12 @@ func (a *appModel) updateSlashCommandsFromInit(initData *provider.InitData) {
 			continue
 		}
 		name := cmdName
+		desc := cliCommandDescriptions[name]
 		cmds = append(cmds, dialog.Command{
 			ID:          "cc-" + name,
 			Title:       "/" + name,
-			Description: "Claude Code: /" + name,
+			Description: desc,
+			Category:    "Claude Code",
 			Handler: func(cmd dialog.Command) tea.Cmd {
 				return util.CmdHandler(chat.SendMsg{Text: "/" + name})
 			},
@@ -1172,7 +1187,12 @@ func initCachePath() string {
 	return filepath.Join(config.WorkingDirectory(), ".omcc", initCacheFile)
 }
 
-func loadCachedInitData() *provider.InitData {
+func loadCachedInitData() (result *provider.InitData) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = nil
+		}
+	}()
 	data, err := os.ReadFile(initCachePath())
 	if err != nil {
 		return nil
