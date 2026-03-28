@@ -196,11 +196,8 @@ func (c *commandDialogCmp) View() string {
 		Padding(0, 1).
 		Render(c.searchInput.View())
 
-	// Build list with category headers
+	// Build list with category headers — use fixed maxVisible, never shrink.
 	maxVisible := c.maxVisible
-	if maxVisible > len(c.filtered) {
-		maxVisible = len(c.filtered)
-	}
 
 	// Calculate scroll window
 	startIdx := 0
@@ -235,16 +232,21 @@ func (c *commandDialogCmp) View() string {
 		listItems = append(listItems, cmd.Render(i == c.selectedIdx, maxWidth))
 	}
 
-	listContent := ""
+	var innerContent string
 	if len(c.filtered) == 0 {
-		listContent = baseStyle.
+		innerContent = baseStyle.
 			Width(maxWidth).
 			Foreground(t.TextMuted()).
 			Padding(0, 1).
 			Render("No matching commands")
 	} else {
-		listContent = lipgloss.JoinVertical(lipgloss.Left, listItems...)
+		innerContent = lipgloss.JoinVertical(lipgloss.Left, listItems...)
 	}
+
+	// Fixed-height list area: 2 lines per item (title + optional description).
+	// This keeps the dialog height constant regardless of search results.
+	fixedListHeight := maxVisible * 2
+	listContent := baseStyle.Width(maxWidth).Height(fixedListHeight).Render(innerContent)
 
 	// Count display
 	countText := ""
