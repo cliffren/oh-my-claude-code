@@ -39,9 +39,125 @@ type uiMessage struct {
 }
 
 func toMarkdown(content string, focused bool, width int) string {
+	content = compactMarkdownTables(content)
 	r := styles.GetMarkdownRenderer(width)
 	rendered, _ := r.Render(content)
 	return rendered
+}
+
+// compactMarkdownTables converts markdown tables to a compact text format
+// so glamour doesn't stretch columns to fill the full width.
+func compactMarkdownTables(content string) string {
+	lines := strings.Split(content, "\n")
+	var result []string
+	i := 0
+	for i < len(lines) {
+		// Detect table: line with | that is followed by a separator line (|---|)
+		if isTableRow(lines[i]) && i+1 < len(lines) && isTableSeparator(lines[i+1]) {
+			// Collect all table rows
+			tableStart := i
+			i++ // skip header
+			i++ // skip separator
+			for i < len(lines) && isTableRow(lines[i]) {
+				i++
+			}
+			// Convert table to compact format
+			compacted := compactTable(lines[tableStart:i])
+			result = append(result, compacted...)
+		} else {
+			result = append(result, lines[i])
+			i++
+		}
+	}
+	return strings.Join(result, "\n")
+}
+
+func isTableRow(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "|") && strings.HasSuffix(trimmed, "|") && strings.Count(trimmed, "|") >= 3
+}
+
+func isTableSeparator(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "|") {
+		return false
+	}
+	// Must contain only |, -, :, and spaces
+	for _, ch := range trimmed {
+		if ch != '|' && ch != '-' && ch != ':' && ch != ' ' {
+			return false
+		}
+	}
+	return strings.Contains(trimmed, "---")
+}
+
+func compactTable(rows []string) []string {
+	// Parse cells
+	var parsed [][]string
+	for i, row := range rows {
+		if i == 1 { // skip separator row
+			continue
+		}
+		cells := parseTableCells(row)
+		parsed = append(parsed, cells)
+	}
+	if len(parsed) == 0 {
+		return rows
+	}
+
+	// Calculate column widths
+	numCols := len(parsed[0])
+	widths := make([]int, numCols)
+	for _, row := range parsed {
+		for j := 0; j < len(row) && j < numCols; j++ {
+			w := len([]rune(row[j]))
+			if w > widths[j] {
+				widths[j] = w
+			}
+		}
+	}
+
+	// Render compact: use code block style to prevent glamour re-expansion
+	var result []string
+	result = append(result, "```")
+	for i, row := range parsed {
+		var line string
+		for j := 0; j < numCols; j++ {
+			cell := ""
+			if j < len(row) {
+				cell = row[j]
+			}
+			runes := []rune(cell)
+			padding := widths[j] - len(runes)
+			if padding < 0 {
+				padding = 0
+			}
+			line += cell + strings.Repeat(" ", padding) + "  "
+		}
+		result = append(result, strings.TrimRight(line, " "))
+		if i == 0 {
+			// Add a thin separator after header
+			var sep string
+			for j := 0; j < numCols; j++ {
+				sep += strings.Repeat("─", widths[j]) + "  "
+			}
+			result = append(result, strings.TrimRight(sep, " "))
+		}
+	}
+	result = append(result, "```")
+	return result
+}
+
+func parseTableCells(row string) []string {
+	trimmed := strings.TrimSpace(row)
+	trimmed = strings.TrimPrefix(trimmed, "|")
+	trimmed = strings.TrimSuffix(trimmed, "|")
+	parts := strings.Split(trimmed, "|")
+	cells := make([]string, len(parts))
+	for i, p := range parts {
+		cells[i] = strings.TrimSpace(p)
+	}
+	return cells
 }
 
 func renderMessage(msg string, isUser bool, isFocused bool, width int, info ...string) string {
