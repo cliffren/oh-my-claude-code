@@ -512,6 +512,46 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Type == pubsub.UpdatedEvent && msg.Payload.ID == a.selectedSession.ID {
 			a.selectedSession = msg.Payload
 		}
+		if msg.Type == pubsub.DeletedEvent {
+			// Refresh session list in dialog if it's open
+			if a.showSessionDialog {
+				sessions, err := a.app.Sessions.List(context.Background())
+				if err == nil {
+					a.sessionDialog.SetSessions(sessions)
+				}
+			}
+			// If the deleted session was the active one, clear the chat
+			if msg.Payload.ID == a.selectedSession.ID {
+				return a, util.CmdHandler(chat.SessionClearedMsg{})
+			}
+		}
+
+	case dialog.SessionDeleteMsg:
+		err := a.app.Sessions.Delete(context.Background(), msg.SessionID)
+		if err != nil {
+			return a, util.ReportError(err)
+		}
+		return a, nil
+
+	case dialog.SessionRenameMsg:
+		sess, err := a.app.Sessions.Get(context.Background(), msg.SessionID)
+		if err != nil {
+			return a, util.ReportError(err)
+		}
+		sess.Title = msg.NewTitle
+		_, err = a.app.Sessions.Save(context.Background(), sess)
+		if err != nil {
+			return a, util.ReportError(err)
+		}
+		// Refresh session list in dialog
+		if a.showSessionDialog {
+			sessions, err := a.app.Sessions.List(context.Background())
+			if err == nil {
+				a.sessionDialog.SetSessions(sessions)
+			}
+		}
+		return a, nil
+
 	case dialog.SessionSelectedMsg:
 		a.showSessionDialog = false
 		if a.currentPage == page.ChatPage {
