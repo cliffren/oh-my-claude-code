@@ -127,7 +127,7 @@ func (a *agent) Cancel(sessionID string) {
 	// Cancel regular requests
 	if cancelFunc, exists := a.activeRequests.LoadAndDelete(sessionID); exists {
 		if cancel, ok := cancelFunc.(context.CancelFunc); ok {
-			logging.Debug("Request cancellation initiated for session: " + sessionID)
+			logging.InfoPersist("Interrupted.")
 			cancel()
 		}
 	}
@@ -135,7 +135,7 @@ func (a *agent) Cancel(sessionID string) {
 	// Also check for summarize requests
 	if cancelFunc, exists := a.activeRequests.LoadAndDelete(sessionID + "-summarize"); exists {
 		if cancel, ok := cancelFunc.(context.CancelFunc); ok {
-			logging.Debug("Summarize cancellation initiated for session: " + sessionID)
+			logging.InfoPersist("Interrupted.")
 			cancel()
 		}
 	}
