@@ -3,9 +3,11 @@ package models
 const (
 	ProviderClaudeCode ModelProvider = "claude-code"
 
-	ClaudeCodeSonnet ModelID = "claude-code-sonnet"
-	ClaudeCodeOpus   ModelID = "claude-code-opus"
-	ClaudeCodeHaiku  ModelID = "claude-code-haiku"
+	ClaudeCodeSonnet   ModelID = "claude-code-sonnet"
+	ClaudeCodeSonnet1M ModelID = "claude-code-sonnet-1m"
+	ClaudeCodeOpus     ModelID = "claude-code-opus"
+	ClaudeCodeOpus1M   ModelID = "claude-code-opus-1m"
+	ClaudeCodeHaiku    ModelID = "claude-code-haiku"
 )
 
 var ClaudeCodeModels = map[ModelID]Model{
@@ -23,6 +25,20 @@ var ClaudeCodeModels = map[ModelID]Model{
 		CanReason:           true,
 		SupportsAttachments: true,
 	},
+	ClaudeCodeSonnet1M: {
+		ID:                  ClaudeCodeSonnet1M,
+		Name:                "Claude Code Sonnet (1M)",
+		Provider:            ProviderClaudeCode,
+		APIModel:            "sonnet",
+		CostPer1MIn:         3.0,
+		CostPer1MOut:        15.0,
+		CostPer1MInCached:   0.30,
+		CostPer1MOutCached:  0,
+		ContextWindow:       1_000_000,
+		DefaultMaxTokens:    16384,
+		CanReason:           true,
+		SupportsAttachments: true,
+	},
 	ClaudeCodeOpus: {
 		ID:                  ClaudeCodeOpus,
 		Name:                "Claude Code Opus",
@@ -33,6 +49,20 @@ var ClaudeCodeModels = map[ModelID]Model{
 		CostPer1MInCached:   1.50,
 		CostPer1MOutCached:  0,
 		ContextWindow:       200000,
+		DefaultMaxTokens:    16384,
+		CanReason:           true,
+		SupportsAttachments: true,
+	},
+	ClaudeCodeOpus1M: {
+		ID:                  ClaudeCodeOpus1M,
+		Name:                "Claude Code Opus (1M)",
+		Provider:            ProviderClaudeCode,
+		APIModel:            "opus",
+		CostPer1MIn:         5.0,
+		CostPer1MOut:        25.0,
+		CostPer1MInCached:   0.50,
+		CostPer1MOutCached:  0,
+		ContextWindow:       1_000_000,
 		DefaultMaxTokens:    16384,
 		CanReason:           true,
 		SupportsAttachments: true,
