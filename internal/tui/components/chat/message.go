@@ -336,7 +336,8 @@ func renderAssistantMessage(
 		position++
 	}
 
-	if content != "" || (finished && finishData.Reason == message.FinishReasonEndTurn) {
+	hasToolCalls := len(msg.ToolCalls()) > 0
+	if content != "" || (finished && finishData.Reason == message.FinishReasonEndTurn && !hasToolCalls) {
 		if content == "" {
 			content = "*Finished without output*"
 		}
@@ -356,7 +357,13 @@ func renderAssistantMessage(
 		position++ // for the space
 	}
 
-	for i, toolCall := range msg.ToolCalls() {
+	toolCalls := msg.ToolCalls()
+	for i, toolCall := range toolCalls {
+		// Attach model/timing info to the last tool call when there is no text content
+		var toolInfo []string
+		if i == len(toolCalls)-1 && hasToolCalls && content == "" {
+			toolInfo = info
+		}
 		toolCallContent := renderToolMessage(
 			toolCall,
 			allMessages,
@@ -366,6 +373,7 @@ func renderAssistantMessage(
 			width,
 			i+1,
 			expandedBlocks,
+			toolInfo,
 		)
 		messages = append(messages, toolCallContent)
 		position += toolCallContent.height
@@ -722,6 +730,7 @@ func renderToolMessage(
 	width int,
 	position int,
 	expandedBlocks map[string]bool,
+	infoLines []string,
 ) uiMessage {
 	if nested {
 		width = width - 3
@@ -801,12 +810,15 @@ func renderToolMessage(
 			toolCalls = append(toolCalls, v.ToolCalls()...)
 		}
 		for _, call := range toolCalls {
-			rendered := renderToolMessage(call, []message.Message{}, messagesService, focusedUIMessageId, true, width, 0, expandedBlocks)
+			rendered := renderToolMessage(call, []message.Message{}, messagesService, focusedUIMessageId, true, width, 0, expandedBlocks, nil)
 			parts = append(parts, rendered.content)
 		}
 	}
 	if responseContent != "" && !nested {
 		parts = append(parts, responseContent)
+	}
+	for _, infoLine := range infoLines {
+		parts = append(parts, infoLine)
 	}
 
 	content := style.Render(
