@@ -31,15 +31,16 @@ import (
 )
 
 type keyMap struct {
-	Logs          key.Binding
-	Quit          key.Binding
-	Help          key.Binding
-	SwitchSession key.Binding
-	Commands      key.Binding
-	Filepicker    key.Binding
-	Models        key.Binding
-	Effort        key.Binding
-	SwitchTheme   key.Binding
+	Logs           key.Binding
+	Quit           key.Binding
+	Help           key.Binding
+	SwitchSession  key.Binding
+	Commands       key.Binding
+	Filepicker     key.Binding
+	Models         key.Binding
+	Effort         key.Binding
+	SwitchTheme    key.Binding
+	PermissionMode key.Binding
 }
 
 type startCompactSessionMsg struct{}
@@ -90,6 +91,11 @@ var keys = keyMap{
 		key.WithKeys("ctrl+t"),
 		key.WithHelp("ctrl+t", "switch theme"),
 	),
+
+	PermissionMode: key.NewBinding(
+		key.WithKeys("ctrl+m"),
+		key.WithHelp("ctrl+m", "permission mode"),
+	),
 }
 
 var helpEsc = key.NewBinding(
@@ -139,6 +145,9 @@ type appModel struct {
 
 	showEffortDialog bool
 	effortDialog     dialog.EffortDialog
+
+	showPermissionModeDialog bool
+	permissionModeDialog     dialog.PermissionModeDialog
 
 	showInitDialog bool
 	initDialog     dialog.InitDialogCmp
@@ -416,6 +425,17 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, util.ReportInfo(fmt.Sprintf("Effort changed to %s", msg.Effort))
 
+	case dialog.ClosePermissionModeDialogMsg:
+		a.showPermissionModeDialog = false
+		return a, nil
+
+	case dialog.PermissionModeSelectedMsg:
+		a.showPermissionModeDialog = false
+		if err := a.app.CoderAgent.UpdatePermissionMode(msg.Mode); err != nil {
+			return a, util.ReportError(err)
+		}
+		return a, util.ReportInfo(fmt.Sprintf("Permission mode changed to %s", msg.Mode))
+
 	case chat.ShowSlashCompletionMsg:
 		if a.currentPage == page.ChatPage && !a.showCommandDialog {
 			allCmds := make([]dialog.Command, len(a.commands))
@@ -549,6 +569,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.showCommandDialog = false
 			a.showModelDialog = false
 			a.showEffortDialog = false
+			a.showPermissionModeDialog = false
 			a.showMultiArgumentsDialog = false
 			if a.showFilepicker {
 				a.showFilepicker = false
@@ -613,6 +634,17 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog && !a.showModelDialog {
 				a.showEffortDialog = true
 				return a, a.effortDialog.Init()
+			}
+			return a, nil
+		case key.Matches(msg, keys.PermissionMode):
+			if a.showPermissionModeDialog {
+				a.showPermissionModeDialog = false
+				return a, nil
+			}
+			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog && !a.showModelDialog {
+				a.permissionModeDialog.SetCurrentMode(a.app.CoderAgent.PermissionMode())
+				a.showPermissionModeDialog = true
+				return a, nil
 			}
 			return a, nil
 		case key.Matches(msg, keys.SwitchTheme):
@@ -744,6 +776,15 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d, effortCmd := a.effortDialog.Update(msg)
 		a.effortDialog = d.(dialog.EffortDialog)
 		cmds = append(cmds, effortCmd)
+		if _, ok := msg.(tea.KeyMsg); ok {
+			return a, tea.Batch(cmds...)
+		}
+	}
+
+	if a.showPermissionModeDialog {
+		d, pmCmd := a.permissionModeDialog.Update(msg)
+		a.permissionModeDialog = d.(dialog.PermissionModeDialog)
+		cmds = append(cmds, pmCmd)
 		if _, ok := msg.(tea.KeyMsg); ok {
 			return a, tea.Batch(cmds...)
 		}
@@ -967,6 +1008,21 @@ func (a appModel) View() string {
 		)
 	}
 
+	if a.showPermissionModeDialog {
+		overlay := a.permissionModeDialog.View()
+		row := lipgloss.Height(appView) / 2
+		row -= lipgloss.Height(overlay) / 2
+		col := lipgloss.Width(appView) / 2
+		col -= lipgloss.Width(overlay) / 2
+		appView = layout.PlaceOverlay(
+			col,
+			row,
+			overlay,
+			appView,
+			true,
+		)
+	}
+
 	if a.showCommandDialog {
 		overlay := a.commandDialog.View()
 		row := lipgloss.Height(appView) / 2
@@ -1045,8 +1101,9 @@ func New(app *app.App, opts ...Option) tea.Model {
 		sessionDialog: dialog.NewSessionDialogCmp(),
 		commandDialog: dialog.NewCommandDialogCmp(),
 		modelDialog:   dialog.NewModelDialogCmp(),
-		effortDialog:  dialog.NewEffortDialogCmp(),
-		permissions:   dialog.NewPermissionDialogCmp(),
+		effortDialog:         dialog.NewEffortDialogCmp(),
+		permissionModeDialog: dialog.NewPermissionModeDialog(),
+		permissions:          dialog.NewPermissionDialogCmp(),
 		initDialog:    dialog.NewInitDialogCmp(),
 		themeDialog:   dialog.NewThemeDialogCmp(),
 		app:           app,

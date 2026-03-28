@@ -1,12 +1,12 @@
 package page
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/components/logs"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/layout"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 var LogsPage PageID = "logs"
@@ -29,6 +29,8 @@ func (p *logsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.width = msg.Width
 		p.height = msg.Height
 		return p, p.SetSize(msg.Width, msg.Height)
+	case tea.MouseMsg:
+		return p.updateMouse(msg)
 	}
 
 	table, cmd := p.table.Update(msg)
@@ -39,6 +41,36 @@ func (p *logsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	p.details = details.(layout.Container)
 
 	return p, tea.Batch(cmds...)
+}
+
+func (p *logsPage) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if p.table != nil && p.table.CapturesMouse() {
+		updated, cmd := p.table.Update(msg)
+		p.table = updated.(layout.Container)
+		return p, cmd
+	}
+	if p.details != nil && p.details.CapturesMouse() {
+		translated := msg
+		translated.Y -= p.height / 2
+		updated, cmd := p.details.Update(translated)
+		p.details = updated.(layout.Container)
+		return p, cmd
+	}
+
+	topHeight := p.height / 2
+	if p.details != nil && msg.Y >= topHeight {
+		translated := msg
+		translated.Y -= topHeight
+		updated, cmd := p.details.Update(translated)
+		p.details = updated.(layout.Container)
+		return p, cmd
+	}
+	if p.table != nil {
+		updated, cmd := p.table.Update(msg)
+		p.table = updated.(layout.Container)
+		return p, cmd
+	}
+	return p, nil
 }
 
 func (p *logsPage) View() string {

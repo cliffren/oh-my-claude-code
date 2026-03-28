@@ -4,17 +4,19 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/Krontx/oh-my-claude-code/internal/diff"
 	"github.com/Krontx/oh-my-claude-code/internal/llm/tools"
 	"github.com/Krontx/oh-my-claude-code/internal/permission"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/layout"
+	selectionpkg "github.com/Krontx/oh-my-claude-code/internal/tui/selection"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type PermissionAction string
@@ -88,6 +90,8 @@ type permissionDialogCmp struct {
 	windowSize      tea.WindowSizeMsg
 	contentViewPort viewport.Model
 	selectedOption  int // 0: Allow, 1: Allow for session, 2: Deny
+	selection       selectionController
+	clipboard       selectionpkg.ClipboardWriter
 
 	diffCache     map[string]string
 	markdownCache map[string]string
@@ -108,6 +112,20 @@ func (p *permissionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.markdownCache = make(map[string]string)
 		p.diffCache = make(map[string]string)
 	case tea.MouseMsg:
+		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown || msg.Button == tea.MouseButtonWheelLeft || msg.Button == tea.MouseButtonWheelRight {
+			viewPort, cmd := p.contentViewPort.Update(msg)
+			p.contentViewPort = viewPort
+			cmds = append(cmds, cmd)
+			break
+		}
+
+		_, _, _, err := p.selection.HandleMouse(msg, p.contentSelectionRegion(), p.visiblePlainLines(), p.clipboard)
+		if err != nil {
+			cmds = append(cmds, util.ReportError(err))
+		}
+		if p.selection.CapturesMouse() || msg.Action == tea.MouseActionRelease {
+			break
+		}
 		viewPort, cmd := p.contentViewPort.Update(msg)
 		p.contentViewPort = viewPort
 		cmds = append(cmds, cmd)
@@ -381,10 +399,15 @@ func (p *permissionDialogCmp) renderDefaultContent() string {
 
 func (p *permissionDialogCmp) styleViewport() string {
 	t := theme.CurrentTheme()
+	visible := strings.Split(p.contentViewPort.View(), "\n")
+	if p.selection.HasSelection() {
+		start, end := p.selection.Bounds()
+		visible = selectionpkg.HighlightLines(visible, start, end, lipgloss.NewStyle().Background(t.BackgroundSecondary()).Foreground(t.Text()))
+	}
 	contentStyle := lipgloss.NewStyle().
 		Background(t.Background())
 
-	return contentStyle.Render(p.contentViewPort.View())
+	return contentStyle.Render(strings.Join(visible, "\n"))
 }
 
 func (p *permissionDialogCmp) render() string {
@@ -522,5 +545,28 @@ func NewPermissionDialogCmp() PermissionDialogCmp {
 		selectedOption:  0, // Default to "Allow"
 		diffCache:       make(map[string]string),
 		markdownCache:   make(map[string]string),
+		clipboard:       selectionpkg.NewClipboardWriter(),
 	}
+}
+
+func (p *permissionDialogCmp) contentSelectionRegion() selectionpkg.Region {
+	return selectionpkg.Region{
+		X:      0,
+		Y:      0,
+		Width:  p.contentViewPort.Width,
+		Height: p.contentViewPort.Height,
+	}
+}
+
+func (p *permissionDialogCmp) visiblePlainLines() []string {
+	visible := strings.Split(p.contentViewPort.View(), "\n")
+	lines := make([]string, len(visible))
+	for idx, line := range visible {
+		lines[idx] = ansi.Strip(line)
+	}
+	return lines
+}
+
+func (p *permissionDialogCmp) CapturesMouse() bool {
+	return p.selection.CapturesMouse()
 }

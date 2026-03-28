@@ -1,16 +1,17 @@
 package layout
 
 import (
+	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 )
 
 type Container interface {
 	tea.Model
 	Sizeable
 	Bindings
+	MouseCapturer
 }
 type container struct {
 	width  int
@@ -36,6 +37,13 @@ func (c *container) Init() tea.Cmd {
 }
 
 func (c *container) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
+		translated, hit := c.translateMouse(mouseMsg, c.CapturesMouse())
+		if !hit {
+			return c, nil
+		}
+		msg = translated
+	}
 	u, cmd := c.content.Update(msg)
 	c.content = u
 	return c, cmd
@@ -114,11 +122,48 @@ func (c *container) GetSize() (int, int) {
 	return c.width, c.height
 }
 
+func (c *container) translateMouse(msg tea.MouseMsg, capture bool) (tea.MouseMsg, bool) {
+	xOffset := c.paddingLeft
+	yOffset := c.paddingTop
+	contentWidth := max(0, c.width-c.paddingLeft-c.paddingRight)
+	contentHeight := max(0, c.height-c.paddingTop-c.paddingBottom)
+
+	if c.borderLeft {
+		xOffset++
+		contentWidth--
+	}
+	if c.borderRight {
+		contentWidth--
+	}
+	if c.borderTop {
+		yOffset++
+		contentHeight--
+	}
+	if c.borderBottom {
+		contentHeight--
+	}
+
+	if !capture && (msg.X < xOffset || msg.X >= xOffset+contentWidth || msg.Y < yOffset || msg.Y >= yOffset+contentHeight) {
+		return tea.MouseMsg{}, false
+	}
+
+	msg.X -= xOffset
+	msg.Y -= yOffset
+	return msg, true
+}
+
 func (c *container) BindingKeys() []key.Binding {
 	if b, ok := c.content.(Bindings); ok {
 		return b.BindingKeys()
 	}
 	return []key.Binding{}
+}
+
+func (c *container) CapturesMouse() bool {
+	if capturer, ok := c.content.(MouseCapturer); ok {
+		return capturer.CapturesMouse()
+	}
+	return false
 }
 
 type ContainerOption func(*container)

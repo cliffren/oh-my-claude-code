@@ -58,6 +58,8 @@ type Service interface {
 	IsBusy() bool
 	Update(agentName config.AgentName, modelID models.ModelID) (models.Model, error)
 	UpdateEffort(agentName config.AgentName, effort string) error
+	PermissionMode() string
+	UpdatePermissionMode(mode string) error
 	Summarize(ctx context.Context, sessionID string) error
 }
 
@@ -71,6 +73,8 @@ type agent struct {
 
 	titleProvider     provider.Provider
 	summarizeProvider provider.Provider
+
+	permissionMode string // current permission mode, default = "default"
 
 	activeRequests sync.Map
 }
@@ -569,7 +573,7 @@ func (a *agent) Update(agentName config.AgentName, modelID models.ModelID) (mode
 		return models.Model{}, fmt.Errorf("failed to update config: %w", err)
 	}
 
-	provider, err := createAgentProvider(agentName)
+	provider, err := createAgentProvider(agentName, provider.WithPermissionMode(a.permissionMode))
 	if err != nil {
 		return models.Model{}, fmt.Errorf("failed to create provider for model %s: %w", modelID, err)
 	}
@@ -586,11 +590,31 @@ func (a *agent) UpdateEffort(agentName config.AgentName, effort string) error {
 	if err := config.UpdateAgentEffort(agentName, effort); err != nil {
 		return err
 	}
-	provider, err := createAgentProvider(agentName)
+	p, err := createAgentProvider(agentName, provider.WithPermissionMode(a.permissionMode))
 	if err != nil {
 		return fmt.Errorf("failed to create provider with new effort: %w", err)
 	}
-	a.provider = provider
+	a.provider = p
+	return nil
+}
+
+func (a *agent) PermissionMode() string {
+	if a.permissionMode == "" {
+		return "default"
+	}
+	return a.permissionMode
+}
+
+func (a *agent) UpdatePermissionMode(mode string) error {
+	if a.IsBusy() {
+		return fmt.Errorf("cannot change permission mode while processing requests")
+	}
+	a.permissionMode = mode
+	p, err := createAgentProvider(config.AgentCoder, provider.WithPermissionMode(mode))
+	if err != nil {
+		return fmt.Errorf("failed to create provider with new permission mode: %w", err)
+	}
+	a.provider = p
 	return nil
 }
 
@@ -765,7 +789,7 @@ func (a *agent) Summarize(ctx context.Context, sessionID string) error {
 	return nil
 }
 
-func createAgentProvider(agentName config.AgentName) (provider.Provider, error) {
+func createAgentProvider(agentName config.AgentName, extraOpts ...provider.ProviderClientOption) (provider.Provider, error) {
 	cfg := config.Get()
 	agentConfig, ok := cfg.Agents[agentName]
 	if !ok {
@@ -817,6 +841,7 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 	} else if model.Provider == models.ProviderClaudeCode && model.CanReason {
 		opts = append(opts, provider.WithEffort(agentConfig.ReasoningEffort))
 	}
+	opts = append(opts, extraOpts...)
 	agentProvider, err := provider.NewProvider(
 		model.Provider,
 		opts...,

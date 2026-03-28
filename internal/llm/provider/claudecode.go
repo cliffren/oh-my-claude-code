@@ -115,6 +115,10 @@ func (c *claudeCodeClient) buildCommand(ctx context.Context) *exec.Cmd {
 		args = append(args, "--effort", c.providerOptions.reasoningEffort)
 	}
 
+	if c.providerOptions.permissionMode != "" && c.providerOptions.permissionMode != "default" {
+		args = append(args, "--permission-mode", c.providerOptions.permissionMode)
+	}
+
 	if c.providerOptions.systemMessage != "" {
 		if c.providerOptions.appendSystemMessage {
 			args = append(args, "--append-system-prompt", c.providerOptions.systemMessage)

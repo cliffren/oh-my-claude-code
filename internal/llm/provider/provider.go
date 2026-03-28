@@ -75,6 +75,7 @@ type providerClientOptions struct {
 	systemMessage       string
 	appendSystemMessage bool
 	reasoningEffort     string
+	permissionMode      string
 
 	anthropicOptions []AnthropicOption
 	openaiOptions    []OpenAIOption
@@ -242,6 +243,12 @@ func WithAppendSystemMessage(append bool) ProviderClientOption {
 func WithEffort(effort string) ProviderClientOption {
 	return func(options *providerClientOptions) {
 		options.reasoningEffort = effort
+	}
+}
+
+func WithPermissionMode(mode string) ProviderClientOption {
+	return func(options *providerClientOptions) {
+		options.permissionMode = mode
 	}
 }
 

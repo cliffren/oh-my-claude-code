@@ -5,14 +5,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/layout"
+	selectionpkg "github.com/Krontx/oh-my-claude-code/internal/tui/selection"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/layout"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type DetailComponent interface {
@@ -25,6 +28,8 @@ type detailCmp struct {
 	width, height int
 	currentLog    logging.LogMessage
 	viewport      viewport.Model
+	selection     selectionController
+	clipboard     selectionpkg.ClipboardWriter
 }
 
 func (i *detailCmp) Init() tea.Cmd {
@@ -39,6 +44,19 @@ func (i *detailCmp) Init() tea.Cmd {
 func (i *detailCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
+		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown || msg.Button == tea.MouseButtonWheelLeft || msg.Button == tea.MouseButtonWheelRight {
+			var cmd tea.Cmd
+			i.viewport, cmd = i.viewport.Update(msg)
+			return i, cmd
+		}
+
+		_, _, _, err := i.selection.HandleMouse(msg, i.selectionRegion(), i.visiblePlainLines(), i.clipboard)
+		if err != nil {
+			return i, util.ReportError(err)
+		}
+		if i.selection.CapturesMouse() || msg.Action == tea.MouseActionRelease {
+			return i, nil
+		}
 		var cmd tea.Cmd
 		i.viewport, cmd = i.viewport.Update(msg)
 		return i, cmd
@@ -103,7 +121,7 @@ func (i *detailCmp) updateContent() {
 func getLevelStyle(level string) lipgloss.Style {
 	style := lipgloss.NewStyle().Bold(true)
 	t := theme.CurrentTheme()
-	
+
 	switch strings.ToLower(level) {
 	case "info":
 		return style.Foreground(t.Info())
@@ -120,7 +138,12 @@ func getLevelStyle(level string) lipgloss.Style {
 
 func (i *detailCmp) View() string {
 	t := theme.CurrentTheme()
-	return styles.ForceReplaceBackgroundWithLipgloss(i.viewport.View(), t.Background())
+	visible := strings.Split(i.viewport.View(), "\n")
+	if i.selection.HasSelection() {
+		start, end := i.selection.Bounds()
+		visible = selectionpkg.HighlightLines(visible, start, end, lipgloss.NewStyle().Background(t.BackgroundSecondary()).Foreground(t.Text()))
+	}
+	return styles.ForceReplaceBackgroundWithLipgloss(strings.Join(visible, "\n"), t.Background())
 }
 
 func (i *detailCmp) GetSize() (int, int) {
@@ -140,8 +163,26 @@ func (i *detailCmp) BindingKeys() []key.Binding {
 	return layout.KeyMapToSlice(i.viewport.KeyMap)
 }
 
+func (i *detailCmp) CapturesMouse() bool {
+	return i.selection.CapturesMouse()
+}
+
 func NewLogsDetails() DetailComponent {
 	return &detailCmp{
-		viewport: viewport.New(0, 0),
+		viewport:  viewport.New(0, 0),
+		clipboard: selectionpkg.NewClipboardWriter(),
 	}
+}
+
+func (i *detailCmp) selectionRegion() selectionpkg.Region {
+	return selectionpkg.Region{X: 0, Y: 0, Width: i.viewport.Width, Height: i.viewport.Height}
+}
+
+func (i *detailCmp) visiblePlainLines() []string {
+	visible := strings.Split(i.viewport.View(), "\n")
+	lines := make([]string, len(visible))
+	for idx, line := range visible {
+		lines[idx] = ansi.Strip(line)
+	}
+	return lines
 }
