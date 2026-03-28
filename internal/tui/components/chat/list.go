@@ -567,7 +567,7 @@ func (m *messagesCmp) hitTestExpandCollapse(viewportY int) string {
 		return ""
 	}
 	line := ansi.Strip(lines[viewportY])
-	isExpandHint := strings.Contains(line, "▶ Show all") || strings.Contains(line, "▼ Collapse")
+	isExpandHint := strings.HasPrefix(line, "▶ ") || strings.HasPrefix(line, "▼ ")
 	if !isExpandHint {
 		return ""
 	}

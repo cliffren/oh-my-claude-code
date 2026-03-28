@@ -627,7 +627,7 @@ func truncateWithHint(content string, height int, expanded bool) string {
 	return strings.Join(lines[:height], "\n") + fmt.Sprintf("\n▶ Show all (%d lines)", totalLines)
 }
 
-func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, width int, expanded bool) string {
+func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, width int) string {
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 
@@ -640,7 +640,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 			Render(errContent)
 	}
 
-	resultContent := truncateWithHint(response.Content, maxResultHeight, expanded)
+	resultContent := response.Content
 	switch toolCall.Name {
 	case agent.AgentToolName:
 		return styles.ForceReplaceBackgroundWithLipgloss(
@@ -656,7 +656,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 	case tools.EditToolName:
 		metadata := tools.EditResponseMetadata{}
 		json.Unmarshal([]byte(response.Metadata), &metadata)
-		truncDiff := truncateWithHint(metadata.Diff, maxResultHeight, expanded)
+		truncDiff := metadata.Diff
 		formattedDiff, _ := diff.FormatDiff(truncDiff, diff.WithTotalWidth(width))
 		return formattedDiff
 	case tools.FetchToolName:
@@ -691,7 +691,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 		} else {
 			ext = strings.ToLower(ext[1:])
 		}
-		resultContent = fmt.Sprintf("```%s\n%s\n```", ext, truncateWithHint(metadata.Content, maxResultHeight, expanded))
+		resultContent = fmt.Sprintf("```%s\n%s\n```", ext, metadata.Content)
 		return styles.ForceReplaceBackgroundWithLipgloss(
 			toMarkdown(resultContent, true, width),
 			t.Background(),
@@ -707,7 +707,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 		} else {
 			ext = strings.ToLower(ext[1:])
 		}
-		resultContent = fmt.Sprintf("```%s\n%s\n```", ext, truncateWithHint(params.Content, maxResultHeight, expanded))
+		resultContent = fmt.Sprintf("```%s\n%s\n```", ext, params.Content)
 		return styles.ForceReplaceBackgroundWithLipgloss(
 			toMarkdown(resultContent, true, width),
 			t.Background(),
@@ -770,18 +770,21 @@ func renderToolMessage(
 	}
 
 	toolBlockID := toolCall.ID
+	isExpanded := expandedBlocks[toolBlockID]
+
+	// ▶/▼ indicator on the header — clicking it toggles the response
+	expandIndicator := "▶ "
+	if isExpanded {
+		expandIndicator = "▼ "
+	}
+	toolNameText = baseStyle.Foreground(t.TextMuted()).
+		Render(fmt.Sprintf("%s%s: ", expandIndicator, toolName(toolCall.Name)))
+
 	params := renderToolParams(width-2-lipgloss.Width(toolNameText), toolCall)
 	responseContent := ""
-	if response != nil {
-		isExpanded := expandedBlocks[toolBlockID]
-		responseContent = renderToolResponse(toolCall, *response, width-2, isExpanded)
+	if response != nil && isExpanded {
+		responseContent = renderToolResponse(toolCall, *response, width-2)
 		responseContent = strings.TrimSuffix(responseContent, "\n")
-	} else {
-		responseContent = baseStyle.
-			Italic(true).
-			Width(width - 2).
-			Foreground(t.TextMuted()).
-			Render("Waiting for response...")
 	}
 
 	parts := []string{}
