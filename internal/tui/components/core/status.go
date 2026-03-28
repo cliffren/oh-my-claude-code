@@ -308,7 +308,7 @@ func NewStatusCmp() StatusCmp {
 	helpWidget = getHelpWidget()
 
 	return &statusCmp{
-		messageTTL: 10 * time.Second,
+		messageTTL: 5 * time.Second,
 		// lspClients: lspClients, // LSP disabled
 	}
 }
