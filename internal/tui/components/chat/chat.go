@@ -2,10 +2,10 @@ package chat
 
 import (
 	"fmt"
-	"sort"
+	// "sort" // LSP disabled
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
+	// "github.com/charmbracelet/x/ansi" // LSP disabled
 	"github.com/Krontx/oh-my-claude-code/internal/config"
 	"github.com/Krontx/oh-my-claude-code/internal/message"
 	"github.com/Krontx/oh-my-claude-code/internal/session"
@@ -42,67 +42,27 @@ func header(width int) string {
 	)
 }
 
-func lspsConfigured(width int) string {
-	cfg := config.Get()
-	title := "LSP Configuration"
-	title = ansi.Truncate(title, width, "…")
-
-	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
-
-	lsps := baseStyle.
-		Width(width).
-		Foreground(t.Primary()).
-		Bold(true).
-		Render(title)
-
-	// Get LSP names and sort them for consistent ordering
-	var lspNames []string
-	for name := range cfg.LSP {
-		lspNames = append(lspNames, name)
-	}
-	sort.Strings(lspNames)
-
-	var lspViews []string
-	for _, name := range lspNames {
-		lsp := cfg.LSP[name]
-		lspName := baseStyle.
-			Foreground(t.Text()).
-			Render(fmt.Sprintf("• %s", name))
-
-		cmd := lsp.Command
-		cmd = ansi.Truncate(cmd, width-lipgloss.Width(lspName)-3, "…")
-
-		lspPath := baseStyle.
-			Foreground(t.TextMuted()).
-			Render(fmt.Sprintf(" (%s)", cmd))
-
-		lspViews = append(lspViews,
-			baseStyle.
-				Width(width).
-				Render(
-					lipgloss.JoinHorizontal(
-						lipgloss.Left,
-						lspName,
-						lspPath,
-					),
-				),
-		)
-	}
-
-	return baseStyle.
-		Width(width).
-		Render(
-			lipgloss.JoinVertical(
-				lipgloss.Left,
-				lsps,
-				lipgloss.JoinVertical(
-					lipgloss.Left,
-					lspViews...,
-				),
-			),
-		)
-}
+// LSP disabled — uncomment to re-enable lspsConfigured display
+// func lspsConfigured(width int) string {
+// 	cfg := config.Get()
+// 	title := "LSP Configuration"
+// 	title = ansi.Truncate(title, width, "…")
+// 	t := theme.CurrentTheme()
+// 	baseStyle := styles.BaseStyle()
+// 	lsps := baseStyle.Width(width).Foreground(t.Primary()).Bold(true).Render(title)
+// 	var lspNames []string
+// 	for name := range cfg.LSP { lspNames = append(lspNames, name) }
+// 	sort.Strings(lspNames)
+// 	var lspViews []string
+// 	for _, name := range lspNames {
+// 		lsp := cfg.LSP[name]
+// 		lspName := baseStyle.Foreground(t.Text()).Render(fmt.Sprintf("• %s", name))
+// 		cmd := ansi.Truncate(lsp.Command, width-lipgloss.Width(lspName)-3, "…")
+// 		lspPath := baseStyle.Foreground(t.TextMuted()).Render(fmt.Sprintf(" (%s)", cmd))
+// 		lspViews = append(lspViews, baseStyle.Width(width).Render(lipgloss.JoinHorizontal(lipgloss.Left, lspName, lspPath)))
+// 	}
+// 	return baseStyle.Width(width).Render(lipgloss.JoinVertical(lipgloss.Left, lsps, lipgloss.JoinVertical(lipgloss.Left, lspViews...)))
+// }
 
 func logo(width int) string {
 	logo := fmt.Sprintf("%s %s", styles.OpenCodeIcon, "omcc")

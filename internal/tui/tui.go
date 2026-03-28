@@ -1098,7 +1098,7 @@ func New(app *app.App, opts ...Option) tea.Model {
 	model := &appModel{
 		currentPage:   startPage,
 		loadedPages:   make(map[page.PageID]bool),
-		status:        core.NewStatusCmp(app.LSPClients),
+		status:        core.NewStatusCmp(), // LSP disabled: was NewStatusCmp(app.LSPClients)
 		help:          dialog.NewHelpCmp(),
 		quit:          dialog.NewQuitCmp(),
 		sessionDialog: dialog.NewSessionDialogCmp(),

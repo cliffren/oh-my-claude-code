@@ -111,8 +111,8 @@ func (m *sidebarCmp) View() string {
 		" ",
 		m.sessionSection(),
 		" ",
-		lspsConfigured(m.width),
-		" ",
+		// lspsConfigured(m.width), // LSP disabled
+		// " ",
 		m.modifiedFiles(),
 	)
 	m.viewport.SetContent(content)

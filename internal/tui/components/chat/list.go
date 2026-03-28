@@ -460,8 +460,8 @@ func (m *messagesCmp) initialScreen() string {
 		lipgloss.JoinVertical(
 			lipgloss.Top,
 			header(m.width),
-			"",
-			lspsConfigured(m.width),
+			// "", // LSP disabled
+			// lspsConfigured(m.width), // LSP disabled
 		),
 	)
 }

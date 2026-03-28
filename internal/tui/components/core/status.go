@@ -9,8 +9,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/Krontx/oh-my-claude-code/internal/config"
 	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
-	"github.com/Krontx/oh-my-claude-code/internal/lsp"
-	"github.com/Krontx/oh-my-claude-code/internal/lsp/protocol"
+	// LSP disabled — uncomment to re-enable
+	// "github.com/Krontx/oh-my-claude-code/internal/lsp"
+	// "github.com/Krontx/oh-my-claude-code/internal/lsp/protocol"
 	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
 	"github.com/Krontx/oh-my-claude-code/internal/session"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/components/chat"
@@ -27,7 +28,7 @@ type statusCmp struct {
 	info           util.InfoMsg
 	width          int
 	messageTTL     time.Duration
-	lspClients     map[string]*lsp.Client
+	// lspClients     map[string]*lsp.Client // LSP disabled
 	session        session.Session
 	permissionMode string // "" means default
 }
@@ -142,11 +143,12 @@ func (m statusCmp) View() string {
 		status += tokensStyle.Render(tokens)
 	}
 
-	diagnostics := styles.Padded().
-		Background(t.BackgroundDarker()).
-		Render(m.projectDiagnostics())
+	// LSP diagnostics disabled — uncomment to re-enable
+	// diagnostics := styles.Padded().
+	// 	Background(t.BackgroundDarker()).
+	// 	Render(m.projectDiagnostics())
 
-	availableWidht := max(0, m.width-lipgloss.Width(helpWidget)-lipgloss.Width(m.model())-lipgloss.Width(diagnostics)-tokenInfoWidth)
+	availableWidht := max(0, m.width-lipgloss.Width(helpWidget)-lipgloss.Width(m.model())-lipgloss.Width(m.permissionModeWidget())-tokenInfoWidth)
 
 	if m.info.Msg != "" {
 		infoStyle := styles.Padded().
@@ -177,98 +179,82 @@ func (m statusCmp) View() string {
 			Render("")
 	}
 
-	status += diagnostics
+	// status += diagnostics // LSP diagnostics disabled
 	status += m.permissionModeWidget()
 	status += m.model()
 	return status
 }
 
-func (m *statusCmp) projectDiagnostics() string {
-	t := theme.CurrentTheme()
+// LSP diagnostics disabled — uncomment block below to re-enable
+// func (m *statusCmp) projectDiagnostics() string {
+// 	t := theme.CurrentTheme()
+// 	initializing := false
+// 	for _, client := range m.lspClients {
+// 		if client.GetServerState() == lsp.StateStarting {
+// 			initializing = true
+// 			break
+// 		}
+// 	}
+// 	if initializing {
+// 		return lipgloss.NewStyle().
+// 			Background(t.BackgroundDarker()).
+// 			Foreground(t.Warning()).
+// 			Render(fmt.Sprintf("%s Initializing LSP...", styles.SpinnerIcon))
+// 	}
+// 	errorDiagnostics := []protocol.Diagnostic{}
+// 	warnDiagnostics := []protocol.Diagnostic{}
+// 	hintDiagnostics := []protocol.Diagnostic{}
+// 	infoDiagnostics := []protocol.Diagnostic{}
+// 	for _, client := range m.lspClients {
+// 		for _, d := range client.GetDiagnostics() {
+// 			for _, diag := range d {
+// 				switch diag.Severity {
+// 				case protocol.SeverityError:
+// 					errorDiagnostics = append(errorDiagnostics, diag)
+// 				case protocol.SeverityWarning:
+// 					warnDiagnostics = append(warnDiagnostics, diag)
+// 				case protocol.SeverityHint:
+// 					hintDiagnostics = append(hintDiagnostics, diag)
+// 				case protocol.SeverityInformation:
+// 					infoDiagnostics = append(infoDiagnostics, diag)
+// 				}
+// 			}
+// 		}
+// 	}
+// 	if len(errorDiagnostics) == 0 && len(warnDiagnostics) == 0 && len(hintDiagnostics) == 0 && len(infoDiagnostics) == 0 {
+// 		return "No diagnostics"
+// 	}
+// 	diagnostics := []string{}
+// 	if len(errorDiagnostics) > 0 {
+// 		errStr := lipgloss.NewStyle().Background(t.BackgroundDarker()).Foreground(t.Error()).
+// 			Render(fmt.Sprintf("%s %d", styles.ErrorIcon, len(errorDiagnostics)))
+// 		diagnostics = append(diagnostics, errStr)
+// 	}
+// 	if len(warnDiagnostics) > 0 {
+// 		warnStr := lipgloss.NewStyle().Background(t.BackgroundDarker()).Foreground(t.Warning()).
+// 			Render(fmt.Sprintf("%s %d", styles.WarningIcon, len(warnDiagnostics)))
+// 		diagnostics = append(diagnostics, warnStr)
+// 	}
+// 	if len(hintDiagnostics) > 0 {
+// 		hintStr := lipgloss.NewStyle().Background(t.BackgroundDarker()).Foreground(t.Text()).
+// 			Render(fmt.Sprintf("%s %d", styles.HintIcon, len(hintDiagnostics)))
+// 		diagnostics = append(diagnostics, hintStr)
+// 	}
+// 	if len(infoDiagnostics) > 0 {
+// 		infoStr := lipgloss.NewStyle().Background(t.BackgroundDarker()).Foreground(t.Info()).
+// 			Render(fmt.Sprintf("%s %d", styles.InfoIcon, len(infoDiagnostics)))
+// 		diagnostics = append(diagnostics, infoStr)
+// 	}
+// 	return strings.Join(diagnostics, " ")
+// }
 
-	// Check if any LSP server is still initializing
-	initializing := false
-	for _, client := range m.lspClients {
-		if client.GetServerState() == lsp.StateStarting {
-			initializing = true
-			break
-		}
-	}
-
-	// If any server is initializing, show that status
-	if initializing {
-		return lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Warning()).
-			Render(fmt.Sprintf("%s Initializing LSP...", styles.SpinnerIcon))
-	}
-
-	errorDiagnostics := []protocol.Diagnostic{}
-	warnDiagnostics := []protocol.Diagnostic{}
-	hintDiagnostics := []protocol.Diagnostic{}
-	infoDiagnostics := []protocol.Diagnostic{}
-	for _, client := range m.lspClients {
-		for _, d := range client.GetDiagnostics() {
-			for _, diag := range d {
-				switch diag.Severity {
-				case protocol.SeverityError:
-					errorDiagnostics = append(errorDiagnostics, diag)
-				case protocol.SeverityWarning:
-					warnDiagnostics = append(warnDiagnostics, diag)
-				case protocol.SeverityHint:
-					hintDiagnostics = append(hintDiagnostics, diag)
-				case protocol.SeverityInformation:
-					infoDiagnostics = append(infoDiagnostics, diag)
-				}
-			}
-		}
-	}
-
-	if len(errorDiagnostics) == 0 && len(warnDiagnostics) == 0 && len(hintDiagnostics) == 0 && len(infoDiagnostics) == 0 {
-		return "No diagnostics"
-	}
-
-	diagnostics := []string{}
-
-	if len(errorDiagnostics) > 0 {
-		errStr := lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Error()).
-			Render(fmt.Sprintf("%s %d", styles.ErrorIcon, len(errorDiagnostics)))
-		diagnostics = append(diagnostics, errStr)
-	}
-	if len(warnDiagnostics) > 0 {
-		warnStr := lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Warning()).
-			Render(fmt.Sprintf("%s %d", styles.WarningIcon, len(warnDiagnostics)))
-		diagnostics = append(diagnostics, warnStr)
-	}
-	if len(hintDiagnostics) > 0 {
-		hintStr := lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Text()).
-			Render(fmt.Sprintf("%s %d", styles.HintIcon, len(hintDiagnostics)))
-		diagnostics = append(diagnostics, hintStr)
-	}
-	if len(infoDiagnostics) > 0 {
-		infoStr := lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Info()).
-			Render(fmt.Sprintf("%s %d", styles.InfoIcon, len(infoDiagnostics)))
-		diagnostics = append(diagnostics, infoStr)
-	}
-
-	return strings.Join(diagnostics, " ")
-}
-
-func (m statusCmp) availableFooterMsgWidth(diagnostics, tokenInfo string) int {
-	tokensWidth := 0
-	if m.session.ID != "" {
-		tokensWidth = lipgloss.Width(tokenInfo) + 2
-	}
-	return max(0, m.width-lipgloss.Width(helpWidget)-lipgloss.Width(m.model())-lipgloss.Width(diagnostics)-tokensWidth)
-}
+// func (m statusCmp) availableFooterMsgWidth(diagnostics, tokenInfo string) int {
+// 	tokensWidth := 0
+// 	if m.session.ID != "" {
+// 		tokensWidth = lipgloss.Width(tokenInfo) + 2
+// 	}
+// 	return max(0, m.width-lipgloss.Width(helpWidget)-lipgloss.Width(m.model())-lipgloss.Width(diagnostics)-tokensWidth)
+// }
 
 func (m statusCmp) permissionModeWidget() string {
 	mode := m.permissionMode
@@ -318,11 +304,14 @@ func (m statusCmp) model() string {
 		Render(label)
 }
 
-func NewStatusCmp(lspClients map[string]*lsp.Client) StatusCmp {
+func NewStatusCmp() StatusCmp {
 	helpWidget = getHelpWidget()
 
 	return &statusCmp{
 		messageTTL: 10 * time.Second,
-		lspClients: lspClients,
+		// lspClients: lspClients, // LSP disabled
 	}
 }
+
+// LSP re-enable: change signature back to NewStatusCmp(lspClients map[string]*lsp.Client)
+// and restore lspClients field, imports, and projectDiagnostics() above.

@@ -4,12 +4,12 @@ import (
 	"testing"
 
 	"github.com/Krontx/oh-my-claude-code/internal/app"
-	"github.com/Krontx/oh-my-claude-code/internal/lsp"
+	// "github.com/Krontx/oh-my-claude-code/internal/lsp" // LSP disabled
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestTopLevelMouseHandlingDoesNotDisableMouseForChatSelection(t *testing.T) {
-	model := New(&app.App{LSPClients: map[string]*lsp.Client{}}).(*appModel)
+	model := New(&app.App{}).(*appModel) // LSP disabled: was &app.App{LSPClients: map[string]*lsp.Client{}}
 
 	updated, cmd := model.Update(tea.MouseMsg{
 		X:      2,
