@@ -53,6 +53,7 @@ type Service interface {
 	IsSessionBusy(sessionID string) bool
 	IsBusy() bool
 	Update(agentName config.AgentName, modelID models.ModelID) (models.Model, error)
+	UpdateEffort(agentName config.AgentName, effort string) error
 	Summarize(ctx context.Context, sessionID string) error
 }
 
@@ -452,7 +453,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 
 	switch event.Type {
 	case provider.EventThinkingDelta:
-		assistantMsg.AppendReasoningContent(event.Content)
+		assistantMsg.AppendReasoningContent(event.Thinking)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventContentDelta:
 		assistantMsg.AppendContent(event.Content)
@@ -530,6 +531,21 @@ func (a *agent) Update(agentName config.AgentName, modelID models.ModelID) (mode
 	a.provider = provider
 
 	return a.provider.Model(), nil
+}
+
+func (a *agent) UpdateEffort(agentName config.AgentName, effort string) error {
+	if a.IsBusy() {
+		return fmt.Errorf("cannot change effort while processing requests")
+	}
+	if err := config.UpdateAgentEffort(agentName, effort); err != nil {
+		return err
+	}
+	provider, err := createAgentProvider(agentName)
+	if err != nil {
+		return fmt.Errorf("failed to create provider with new effort: %w", err)
+	}
+	a.provider = provider
+	return nil
 }
 
 func (a *agent) Summarize(ctx context.Context, sessionID string) error {
@@ -745,6 +761,8 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 				provider.WithAnthropicShouldThinkFn(provider.DefaultShouldThinkFn),
 			),
 		)
+	} else if model.Provider == models.ProviderClaudeCode && model.CanReason {
+		opts = append(opts, provider.WithEffort(agentConfig.ReasoningEffort))
 	}
 	agentProvider, err := provider.NewProvider(
 		model.Provider,

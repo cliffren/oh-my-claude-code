@@ -23,6 +23,13 @@ type SessionSelectedMsg = session.Session
 
 type SessionClearedMsg struct{}
 
+// ShowSlashCompletionMsg is emitted when "/" is typed into an empty editor.
+type ShowSlashCompletionMsg struct{}
+
+type InternalSlashCommandMsg struct {
+	Command string
+}
+
 type EditorFocusMsg bool
 
 func header(width int) string {

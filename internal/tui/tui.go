@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,6 +21,7 @@ import (
 	"github.com/Krontx/oh-my-claude-code/internal/tui/components/dialog"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/layout"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/page"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
 )
@@ -32,6 +34,7 @@ type keyMap struct {
 	Commands      key.Binding
 	Filepicker    key.Binding
 	Models        key.Binding
+	Effort        key.Binding
 	SwitchTheme   key.Binding
 }
 
@@ -72,6 +75,11 @@ var keys = keyMap{
 	Models: key.NewBinding(
 		key.WithKeys("ctrl+o"),
 		key.WithHelp("ctrl+o", "model selection"),
+	),
+
+	Effort: key.NewBinding(
+		key.WithKeys("ctrl+x"),
+		key.WithHelp("ctrl+x", "effort level"),
 	),
 
 	SwitchTheme: key.NewBinding(
@@ -120,9 +128,13 @@ type appModel struct {
 	showCommandDialog bool
 	commandDialog     dialog.CommandDialog
 	commands          []dialog.Command
+	slashCommands     []dialog.Command
 
 	showModelDialog bool
 	modelDialog     dialog.ModelDialog
+
+	showEffortDialog bool
+	effortDialog     dialog.EffortDialog
 
 	showInitDialog bool
 	initDialog     dialog.InitDialogCmp
@@ -135,6 +147,9 @@ type appModel struct {
 
 	showMultiArgumentsDialog bool
 	multiArgumentsDialog     dialog.MultiArgumentsDialogCmp
+
+	lastCtrlC    time.Time
+	mouseEnabled bool
 
 	isCompacting      bool
 	compactingMessage string
@@ -348,6 +363,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case dialog.ThemeChangedMsg:
+		styles.InvalidateMarkdownCache()
 		a.pages[a.currentPage], cmd = a.pages[a.currentPage].Update(msg)
 		a.showThemeDialog = false
 		return a, tea.Batch(cmd, util.ReportInfo("Theme changed to: "+msg.ThemeName))
@@ -365,6 +381,57 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return a, util.ReportInfo(fmt.Sprintf("Model changed to %s", model.Name))
+
+	case dialog.CloseEffortDialogMsg:
+		a.showEffortDialog = false
+		return a, nil
+
+	case dialog.EffortSelectedMsg:
+		a.showEffortDialog = false
+		if err := a.app.CoderAgent.UpdateEffort(config.AgentCoder, msg.Effort); err != nil {
+			return a, util.ReportError(err)
+		}
+		return a, util.ReportInfo(fmt.Sprintf("Effort changed to %s", msg.Effort))
+
+	case chat.ShowSlashCompletionMsg:
+		if a.currentPage == page.ChatPage && !a.showCommandDialog {
+			allCmds := make([]dialog.Command, len(a.commands))
+			copy(allCmds, a.commands)
+			allCmds = append(allCmds, a.slashCommands...)
+			a.commandDialog.SetCommands(allCmds)
+			a.showCommandDialog = true
+		}
+		return a, nil
+
+	case chat.InternalSlashCommandMsg:
+		switch msg.Command {
+		case "model":
+			a.showModelDialog = true
+			return a, a.modelDialog.Init()
+		case "sessions":
+			sessions, err := a.app.Sessions.List(context.Background())
+			if err != nil {
+				return a, util.ReportError(err)
+			}
+			if len(sessions) == 0 {
+				return a, util.ReportWarn("No sessions available")
+			}
+			a.sessionDialog.SetSessions(sessions)
+			a.showSessionDialog = true
+			return a, nil
+		case "theme":
+			a.showThemeDialog = true
+			return a, a.themeDialog.Init()
+		case "effort":
+			a.showEffortDialog = true
+			return a, a.effortDialog.Init()
+		case "help":
+			a.showHelp = true
+			return a, nil
+		case "new":
+			return a, util.CmdHandler(chat.SessionClearedMsg{})
+		}
+		return a, nil
 
 	case dialog.ShowInitDialogMsg:
 		a.showInitDialog = msg.Show
@@ -442,7 +509,20 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case tea.MouseMsg:
+		// On mouse click/press, temporarily disable mouse mode so the terminal
+		// handles text selection natively. Re-enabled on next key event.
+		if msg.Action == tea.MouseActionPress {
+			a.mouseEnabled = false
+			return a, tea.DisableMouse
+		}
+
 	case tea.KeyMsg:
+		// Re-enable mouse mode on any key press if it was disabled for selection
+		if !a.mouseEnabled {
+			a.mouseEnabled = true
+			cmds = append(cmds, tea.EnableMouseCellMotion)
+		}
 		// If multi-arguments dialog is open, let it handle the key press first
 		if a.showMultiArgumentsDialog {
 			args, cmd := a.multiArgumentsDialog.Update(msg)
@@ -453,26 +533,32 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 
 		case key.Matches(msg, keys.Quit):
-			a.showQuit = !a.showQuit
-			if a.showHelp {
-				a.showHelp = false
-			}
-			if a.showSessionDialog {
-				a.showSessionDialog = false
-			}
-			if a.showCommandDialog {
-				a.showCommandDialog = false
-			}
+			// Close any open dialogs first
+			a.showHelp = false
+			a.showSessionDialog = false
+			a.showCommandDialog = false
+			a.showModelDialog = false
+			a.showEffortDialog = false
+			a.showMultiArgumentsDialog = false
 			if a.showFilepicker {
 				a.showFilepicker = false
 				a.filepicker.ToggleFilepicker(a.showFilepicker)
 			}
-			if a.showModelDialog {
-				a.showModelDialog = false
+
+			// If agent is busy, first Ctrl+C cancels it
+			if a.app.CoderAgent.IsBusy() && a.selectedSession.ID != "" {
+				a.app.CoderAgent.Cancel(a.selectedSession.ID)
+				a.lastCtrlC = time.Now()
+				return a, util.ReportInfo("Interrupted. Press Ctrl+C again to quit.")
 			}
-			if a.showMultiArgumentsDialog {
-				a.showMultiArgumentsDialog = false
+
+			// Double Ctrl+C within 2 seconds = quit immediately
+			if time.Since(a.lastCtrlC) < 2*time.Second {
+				return a, tea.Quit
 			}
+
+			a.lastCtrlC = time.Now()
+			a.showQuit = true
 			return a, nil
 		case key.Matches(msg, keys.SwitchSession):
 			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showCommandDialog {
@@ -508,6 +594,16 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog {
 				a.showModelDialog = true
 				return a, nil
+			}
+			return a, nil
+		case key.Matches(msg, keys.Effort):
+			if a.showEffortDialog {
+				a.showEffortDialog = false
+				return a, nil
+			}
+			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog && !a.showModelDialog {
+				a.showEffortDialog = true
+				return a, a.effortDialog.Init()
 			}
 			return a, nil
 		case key.Matches(msg, keys.SwitchTheme):
@@ -630,7 +726,15 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d, modelCmd := a.modelDialog.Update(msg)
 		a.modelDialog = d.(dialog.ModelDialog)
 		cmds = append(cmds, modelCmd)
-		// Only block key messages send all other messages down
+		if _, ok := msg.(tea.KeyMsg); ok {
+			return a, tea.Batch(cmds...)
+		}
+	}
+
+	if a.showEffortDialog {
+		d, effortCmd := a.effortDialog.Update(msg)
+		a.effortDialog = d.(dialog.EffortDialog)
+		cmds = append(cmds, effortCmd)
 		if _, ok := msg.(tea.KeyMsg); ok {
 			return a, tea.Batch(cmds...)
 		}
@@ -839,6 +943,21 @@ func (a appModel) View() string {
 		)
 	}
 
+	if a.showEffortDialog {
+		overlay := a.effortDialog.View()
+		row := lipgloss.Height(appView) / 2
+		row -= lipgloss.Height(overlay) / 2
+		col := lipgloss.Width(appView) / 2
+		col -= lipgloss.Width(overlay) / 2
+		appView = layout.PlaceOverlay(
+			col,
+			row,
+			overlay,
+			appView,
+			true,
+		)
+	}
+
 	if a.showCommandDialog {
 		overlay := a.commandDialog.View()
 		row := lipgloss.Height(appView) / 2
@@ -909,11 +1028,13 @@ func New(app *app.App) tea.Model {
 		sessionDialog: dialog.NewSessionDialogCmp(),
 		commandDialog: dialog.NewCommandDialogCmp(),
 		modelDialog:   dialog.NewModelDialogCmp(),
+		effortDialog:  dialog.NewEffortDialogCmp(),
 		permissions:   dialog.NewPermissionDialogCmp(),
 		initDialog:    dialog.NewInitDialogCmp(),
 		themeDialog:   dialog.NewThemeDialogCmp(),
 		app:           app,
 		commands:      []dialog.Command{},
+		mouseEnabled:  true,
 		pages: map[page.PageID]tea.Model{
 			page.ChatPage: page.NewChatPage(app),
 			page.LogsPage: page.NewLogsPage(),
@@ -959,6 +1080,51 @@ If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (
 		for _, cmd := range customCommands {
 			model.RegisterCommand(cmd)
 		}
+	}
+
+	// Register slash commands (shown when user types "/")
+	// Internal commands handled by TUI
+	model.slashCommands = []dialog.Command{
+		{ID: "model", Title: "/model", Description: "Switch AI model", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "model"})
+		}},
+		{ID: "sessions", Title: "/sessions", Description: "Switch session", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "sessions"})
+		}},
+		{ID: "theme", Title: "/theme", Description: "Switch theme", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "theme"})
+		}},
+		{ID: "effort", Title: "/effort", Description: "Set reasoning effort level", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "effort"})
+		}},
+		{ID: "new", Title: "/new", Description: "Start a new session", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "new"})
+		}},
+		{ID: "help", Title: "/help", Description: "Show help", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "help"})
+		}},
+		// Claude Code CLI commands (sent to agent)
+		{ID: "cc-compact", Title: "/compact", Description: "Compact conversation context", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.SendMsg{Text: "/compact"})
+		}},
+		{ID: "cc-review", Title: "/review", Description: "Review code changes", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.SendMsg{Text: "/review"})
+		}},
+		{ID: "cc-init", Title: "/init", Description: "Initialize CLAUDE.md for project", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.SendMsg{Text: "/init"})
+		}},
+		{ID: "cc-cost", Title: "/cost", Description: "Show session cost", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.SendMsg{Text: "/cost"})
+		}},
+		{ID: "cc-context", Title: "/context", Description: "Show context usage", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.SendMsg{Text: "/context"})
+		}},
+		{ID: "cc-pr-comments", Title: "/pr-comments", Description: "Review PR comments", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.SendMsg{Text: "/pr-comments"})
+		}},
+		{ID: "cc-security-review", Title: "/security-review", Description: "Security review", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.SendMsg{Text: "/security-review"})
+		}},
 	}
 
 	return model

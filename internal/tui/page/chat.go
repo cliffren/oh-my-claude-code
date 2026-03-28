@@ -153,6 +153,15 @@ func (p *chatPage) clearSidebar() tea.Cmd {
 }
 
 func (p *chatPage) sendMessage(text string, attachments []message.Attachment) tea.Cmd {
+	// Intercept internal slash commands
+	if strings.HasPrefix(text, "/") && len(attachments) == 0 {
+		cmd := strings.TrimPrefix(text, "/")
+		cmd = strings.TrimSpace(cmd)
+		if completions.InternalCommands[cmd] {
+			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: cmd})
+		}
+	}
+
 	var cmds []tea.Cmd
 	if p.session.ID == "" {
 		session, err := p.app.Sessions.Create(context.Background(), "New Session")

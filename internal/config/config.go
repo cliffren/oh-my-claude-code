@@ -544,8 +544,8 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 			}
 			logging.Info("added provider from environment", "provider", provider)
 		}
-	} else if providerCfg.Disabled || providerCfg.APIKey == "" {
-		// Provider is disabled or has no API key
+	} else if providerCfg.Disabled || (providerCfg.APIKey == "" && provider != models.ProviderClaudeCode) {
+		// Provider is disabled or has no API key (claude-code uses CLI, not API key)
 		logging.Warn("provider is disabled or has no API key, reverting to default",
 			"agent", name,
 			"model", agent.Model,
@@ -950,6 +950,35 @@ func UpdateAgentModel(agentName AgentName, modelID models.ModelID) error {
 		return fmt.Errorf("failed to update agent model: %w", err)
 	}
 
+	return updateCfgFile(func(config *Config) {
+		if config.Agents == nil {
+			config.Agents = make(map[AgentName]Agent)
+		}
+		config.Agents[agentName] = newAgentCfg
+	})
+}
+
+// UpdateAgentEffort updates the reasoning effort for an agent.
+func UpdateAgentEffort(agentName AgentName, effort string) error {
+	if cfg == nil {
+		panic("config not loaded")
+	}
+	switch effort {
+	case "low", "medium", "high", "max":
+	default:
+		return fmt.Errorf("invalid effort level %q: must be low, medium, high, or max", effort)
+	}
+	existingAgentCfg := cfg.Agents[agentName]
+	model := models.SupportedModels[existingAgentCfg.Model]
+	if !model.CanReason {
+		return fmt.Errorf("model %s does not support reasoning effort", model.Name)
+	}
+	newAgentCfg := Agent{
+		Model:           existingAgentCfg.Model,
+		MaxTokens:       existingAgentCfg.MaxTokens,
+		ReasoningEffort: effort,
+	}
+	cfg.Agents[agentName] = newAgentCfg
 	return updateCfgFile(func(config *Config) {
 		if config.Agents == nil {
 			config.Agents = make(map[AgentName]Agent)

@@ -120,6 +120,7 @@ MCP servers, custom agents, plan mode — rendered in a polished terminal interf
 		program := tea.NewProgram(
 			tui.New(app),
 			tea.WithAltScreen(),
+			tea.WithMouseCellMotion(),
 		)
 
 		// Setup the subscriptions, this will send services events to the TUI

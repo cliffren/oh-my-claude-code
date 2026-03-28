@@ -14,13 +14,23 @@ func boolPtr(b bool) *bool       { return &b }
 func stringPtr(s string) *string { return &s }
 func uintPtr(u uint) *uint       { return &u }
 
-// returns a glamour TermRenderer configured with the current theme
+var rendererCache = make(map[int]*glamour.TermRenderer)
+
 func GetMarkdownRenderer(width int) *glamour.TermRenderer {
+	if r, ok := rendererCache[width]; ok {
+		return r
+	}
 	r, _ := glamour.NewTermRenderer(
 		glamour.WithStyles(generateMarkdownStyleConfig()),
 		glamour.WithWordWrap(width),
 	)
+	rendererCache[width] = r
 	return r
+}
+
+// InvalidateMarkdownCache clears cached renderers (call on theme change).
+func InvalidateMarkdownCache() {
+	rendererCache = make(map[int]*glamour.TermRenderer)
 }
 
 // creates an ansi.StyleConfig for markdown rendering
@@ -253,6 +263,7 @@ func generateMarkdownStyleConfig() ansi.StyleConfig {
 				StylePrimitive: ansi.StylePrimitive{
 					BlockPrefix: "\n",
 					BlockSuffix: "\n",
+					Color:       stringPtr(adaptiveColorToString(t.MarkdownText())),
 				},
 			},
 			CenterSeparator: stringPtr("┼"),

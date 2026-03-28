@@ -240,7 +240,7 @@ func (c *completionDialogCmp) BindingKeys() []key.Binding {
 	return layout.KeyMapToSlice(completionDialogKeys)
 }
 
-func NewCompletionDialogCmp(completionProvider CompletionProvider) CompletionDialog {
+func NewCompletionDialogCmp(completionProvider CompletionProvider, fallbackMsgs ...string) CompletionDialog {
 	ti := textarea.New()
 
 	items, err := completionProvider.GetChildEntries("")
@@ -248,10 +248,15 @@ func NewCompletionDialogCmp(completionProvider CompletionProvider) CompletionDia
 		logging.Error("Failed to get child entries", err)
 	}
 
+	fallbackMsg := "No file matches found"
+	if len(fallbackMsgs) > 0 {
+		fallbackMsg = fallbackMsgs[0]
+	}
+
 	li := utilComponents.NewSimpleList(
 		items,
 		7,
-		"No file matches found",
+		fallbackMsg,
 		false,
 	)
 

@@ -38,6 +38,10 @@ func (i *detailCmp) Init() tea.Cmd {
 
 func (i *detailCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		var cmd tea.Cmd
+		i.viewport, cmd = i.viewport.Update(msg)
+		return i, cmd
 	case selectedLogMsg:
 		if msg.ID != i.currentLog.ID {
 			i.currentLog = logging.LogMessage(msg)

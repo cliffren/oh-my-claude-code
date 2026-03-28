@@ -198,6 +198,10 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deleteMode = false
 			return m, nil
 		}
+		// "/" in empty editor opens command palette
+		if m.textarea.Focused() && msg.String() == "/" && m.textarea.Value() == "" {
+			return m, util.CmdHandler(ShowSlashCompletionMsg{})
+		}
 		// Hanlde Enter key
 		if m.textarea.Focused() && key.Matches(msg, editorMaps.Send) {
 			value := m.textarea.Value()

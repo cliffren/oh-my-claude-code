@@ -105,6 +105,10 @@ func (c *claudeCodeClient) buildCommand(ctx context.Context) *exec.Cmd {
 		"--model", string(c.providerOptions.model.APIModel),
 	}
 
+	if c.providerOptions.reasoningEffort != "" && c.providerOptions.model.CanReason {
+		args = append(args, "--effort", c.providerOptions.reasoningEffort)
+	}
+
 	c.mu.Lock()
 	sid := c.sessionID
 	c.mu.Unlock()
@@ -212,6 +216,7 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 
 	var fullContent strings.Builder
 	var totalUsage TokenUsage
+	hadStreamDeltas := false
 
 	// Track active tool calls for proper start/stop events.
 	activeToolCalls := make(map[string]bool)
@@ -246,13 +251,14 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 			if event.Event == nil {
 				continue
 			}
+			hadStreamDeltas = true
 			c.handleStreamEvent(event.Event, eventChan, &fullContent)
 
 		case "assistant":
 			if event.Message == nil {
 				continue
 			}
-			c.handleAssistantMessage(event.Message, eventChan, activeToolCalls)
+			c.handleAssistantMessage(event.Message, eventChan, activeToolCalls, &fullContent, hadStreamDeltas)
 
 		case "user":
 			if event.Message == nil {
@@ -312,10 +318,25 @@ func (c *claudeCodeClient) handleStreamEvent(event *streamEvent, eventChan chan<
 }
 
 // handleAssistantMessage processes full assistant messages, emitting
-// EventToolUseStart for any tool_use content blocks.
-func (c *claudeCodeClient) handleAssistantMessage(msg *claudeMessage, eventChan chan<- ProviderEvent, activeToolCalls map[string]bool) {
+// EventContentDelta for text blocks and EventToolUseStart for tool_use blocks.
+func (c *claudeCodeClient) handleAssistantMessage(msg *claudeMessage, eventChan chan<- ProviderEvent, activeToolCalls map[string]bool, fullContent *strings.Builder, hadStreamDeltas bool) {
 	blocks := c.parseContentBlocks(msg.Content)
 	for _, block := range blocks {
+		// Only emit text from assistant messages if no stream_event deltas
+		// were received for this turn, to avoid double-counting.
+		if block.Type == "text" && block.Text != "" && !hadStreamDeltas {
+			fullContent.WriteString(block.Text)
+			eventChan <- ProviderEvent{
+				Type:    EventContentDelta,
+				Content: block.Text,
+			}
+		}
+		if block.Type == "thinking" && block.Thinking != "" {
+			eventChan <- ProviderEvent{
+				Type:     EventThinkingDelta,
+				Thinking: block.Thinking,
+			}
+		}
 		if block.Type == "tool_use" && block.ID != "" && !activeToolCalls[block.ID] {
 			activeToolCalls[block.ID] = true
 			inputStr := "{}"

@@ -58,9 +58,9 @@ func renderMessage(msg string, isUser bool, isFocused bool, width int, info ...s
 		style = style.BorderForeground(t.Secondary())
 	}
 
-	// Apply markdown formatting and handle background color
+	// Apply markdown formatting; reduce width to account for border
 	parts := []string{
-		styles.ForceReplaceBackgroundWithLipgloss(toMarkdown(msg, isFocused, width), t.Background()),
+		styles.ForceReplaceBackgroundWithLipgloss(toMarkdown(msg, isFocused, width-3), t.Background()),
 	}
 
 	// Remove newline at the end
@@ -126,7 +126,6 @@ func renderAssistantMessage(
 ) []uiMessage {
 	messages := []uiMessage{}
 	content := msg.Content().String()
-	thinking := msg.IsThinking()
 	thinkingContent := msg.ReasoningContent().Thinking
 	finished := msg.IsFinished()
 	finishData := msg.FinishPart()
@@ -165,6 +164,36 @@ func renderAssistantMessage(
 			)
 		}
 	}
+	// Render thinking content as a muted block before the main content
+	if thinkingContent != "" {
+		// Truncate very long thinking content to keep UI manageable
+		truncated := thinkingContent
+		const maxThinkingLines = 20
+		lines := strings.Split(truncated, "\n")
+		if len(lines) > maxThinkingLines {
+			truncated = strings.Join(lines[:maxThinkingLines], "\n") + "\n..."
+		}
+
+		thinkingStyle := styles.BaseStyle().
+			Width(width - 1).
+			BorderLeft(true).
+			Foreground(t.TextMuted()).
+			BorderForeground(t.TextMuted()).
+			BorderStyle(lipgloss.ThickBorder())
+
+		thinkingBlock := thinkingStyle.Foreground(t.TextMuted()).Render("Thinking...\n" + truncated)
+
+		messages = append(messages, uiMessage{
+			ID:          msg.ID + "-thinking",
+			messageType: assistantMessageType,
+			position:    position,
+			height:      lipgloss.Height(thinkingBlock),
+			content:     thinkingBlock,
+		})
+		position += lipgloss.Height(thinkingBlock)
+		position++
+	}
+
 	if content != "" || (finished && finishData.Reason == message.FinishReasonEndTurn) {
 		if content == "" {
 			content = "*Finished without output*"
@@ -181,11 +210,8 @@ func renderAssistantMessage(
 			height:      lipgloss.Height(content),
 			content:     content,
 		})
-		position += messages[0].height
+		position += messages[len(messages)-1].height
 		position++ // for the space
-	} else if thinking && thinkingContent != "" {
-		// Render the thinking content
-		content = renderMessage(thinkingContent, false, msg.ID == focusedUIMessageId, width)
 	}
 
 	for i, toolCall := range msg.ToolCalls() {

@@ -95,6 +95,10 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport = u
 			cmds = append(cmds, cmd)
 		}
+	case tea.MouseMsg:
+		u, cmd := m.viewport.Update(msg)
+		m.viewport = u
+		cmds = append(cmds, cmd)
 
 	case renderFinishedMsg:
 		m.rendering = false

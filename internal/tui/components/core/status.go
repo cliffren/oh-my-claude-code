@@ -276,11 +276,15 @@ func (m statusCmp) model() string {
 		return "Unknown"
 	}
 	model := models.SupportedModels[coder.Model]
+	label := model.Name
+	if model.CanReason && coder.ReasoningEffort != "" {
+		label += " [" + coder.ReasoningEffort + "]"
+	}
 
 	return styles.Padded().
 		Background(t.Secondary()).
 		Foreground(t.Background()).
-		Render(model.Name)
+		Render(label)
 }
 
 func NewStatusCmp(lspClients map[string]*lsp.Client) StatusCmp {

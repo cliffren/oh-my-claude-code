@@ -107,6 +107,10 @@ func (p *permissionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		p.markdownCache = make(map[string]string)
 		p.diffCache = make(map[string]string)
+	case tea.MouseMsg:
+		viewPort, cmd := p.contentViewPort.Update(msg)
+		p.contentViewPort = viewPort
+		cmds = append(cmds, cmd)
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, permissionsKeys.Right) || key.Matches(msg, permissionsKeys.Tab):

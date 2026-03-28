@@ -59,10 +59,11 @@ type Provider interface {
 }
 
 type providerClientOptions struct {
-	apiKey        string
-	model         models.Model
-	maxTokens     int64
-	systemMessage string
+	apiKey          string
+	model           models.Model
+	maxTokens       int64
+	systemMessage   string
+	reasoningEffort string
 
 	anthropicOptions []AnthropicOption
 	openaiOptions    []OpenAIOption
@@ -218,6 +219,12 @@ func WithMaxTokens(maxTokens int64) ProviderClientOption {
 func WithSystemMessage(systemMessage string) ProviderClientOption {
 	return func(options *providerClientOptions) {
 		options.systemMessage = systemMessage
+	}
+}
+
+func WithEffort(effort string) ProviderClientOption {
+	return func(options *providerClientOptions) {
+		options.reasoningEffort = effort
 	}
 }
 
