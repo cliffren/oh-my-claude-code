@@ -4,12 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/Krontx/oh-my-claude-code/internal/app"
 	"github.com/Krontx/oh-my-claude-code/internal/message"
 	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
@@ -18,6 +14,12 @@ import (
 	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type cacheItem struct {
@@ -25,17 +27,24 @@ type cacheItem struct {
 	content []uiMessage
 }
 type messagesCmp struct {
-	app           *app.App
-	width, height int
-	viewport      viewport.Model
-	session       session.Session
-	messages      []message.Message
-	uiMessages    []uiMessage
-	currentMsgID  string
-	cachedContent map[string]cacheItem
-	spinner       spinner.Model
-	rendering     bool
-	attachments   viewport.Model
+	app            *app.App
+	width, height  int
+	viewport       viewport.Model
+	session        session.Session
+	messages       []message.Message
+	uiMessages     []uiMessage
+	currentMsgID   string
+	cachedContent  map[string]cacheItem
+	expandedBlocks map[string]bool
+	spinner        spinner.Model
+	rendering      bool
+	attachments    viewport.Model
+	selection      selectionController
+	clipboard      clipboardWriter
+}
+
+type ToggleExpandMsg struct {
+	BlockID string
 }
 type renderFinishedMsg struct{}
 
@@ -81,6 +90,22 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+	case ToggleExpandMsg:
+		if m.expandedBlocks[msg.BlockID] {
+			delete(m.expandedBlocks, msg.BlockID)
+		} else {
+			m.expandedBlocks[msg.BlockID] = true
+		}
+		// Find the parent message ID and invalidate its cache
+		for _, mm := range m.messages {
+			if strings.HasPrefix(msg.BlockID, mm.ID) {
+				delete(m.cachedContent, mm.ID)
+				break
+			}
+		}
+		m.renderView()
+		return m, nil
+
 	case SessionClearedMsg:
 		m.session = session.Session{}
 		m.messages = make([]message.Message, 0)
@@ -96,6 +121,28 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	case tea.MouseMsg:
+		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown || msg.Button == tea.MouseButtonWheelLeft || msg.Button == tea.MouseButtonWheelRight {
+			u, cmd := m.viewport.Update(msg)
+			m.viewport = u
+			cmds = append(cmds, cmd)
+			break
+		}
+
+		// Check for click on expand/collapse hints
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if blockID := m.hitTestExpandCollapse(msg.Y); blockID != "" {
+				m.Update(ToggleExpandMsg{BlockID: blockID})
+				break
+			}
+		}
+
+		_, _, _, err := m.selection.handleMouse(msg, m.selectionRegion(), m.visiblePlainLines(), m.clipboard)
+		if err != nil {
+			cmds = append(cmds, util.ReportError(err))
+		}
+		if m.selection.capturesMouse() || msg.Action == tea.MouseActionRelease {
+			break
+		}
 		u, cmd := m.viewport.Update(msg)
 		m.viewport = u
 		cmds = append(cmds, cmd)
@@ -196,27 +243,28 @@ func (m *messagesCmp) renderView() {
 	if m.width == 0 {
 		return
 	}
+	contentWidth := max(0, m.viewport.Width)
 	for inx, msg := range m.messages {
 		switch msg.Role {
 		case message.User:
-			if cache, ok := m.cachedContent[msg.ID]; ok && cache.width == m.width {
+			if cache, ok := m.cachedContent[msg.ID]; ok && cache.width == contentWidth {
 				m.uiMessages = append(m.uiMessages, cache.content...)
 				continue
 			}
 			userMsg := renderUserMessage(
 				msg,
 				msg.ID == m.currentMsgID,
-				m.width,
+				contentWidth,
 				pos,
 			)
 			m.uiMessages = append(m.uiMessages, userMsg)
 			m.cachedContent[msg.ID] = cacheItem{
-				width:   m.width,
+				width:   contentWidth,
 				content: []uiMessage{userMsg},
 			}
 			pos += userMsg.height + 1 // + 1 for spacing
 		case message.Assistant:
-			if cache, ok := m.cachedContent[msg.ID]; ok && cache.width == m.width {
+			if cache, ok := m.cachedContent[msg.ID]; ok && cache.width == contentWidth {
 				m.uiMessages = append(m.uiMessages, cache.content...)
 				continue
 			}
@@ -229,15 +277,16 @@ func (m *messagesCmp) renderView() {
 				m.app.Messages,
 				m.currentMsgID,
 				isSummary,
-				m.width,
+				contentWidth,
 				pos,
+				m.expandedBlocks,
 			)
 			for _, msg := range assistantMessages {
 				m.uiMessages = append(m.uiMessages, msg)
 				pos += msg.height + 1 // + 1 for spacing
 			}
 			m.cachedContent[msg.ID] = cacheItem{
-				width:   m.width,
+				width:   contentWidth,
 				content: assistantMessages,
 			}
 		}
@@ -247,7 +296,7 @@ func (m *messagesCmp) renderView() {
 	for _, v := range m.uiMessages {
 		messages = append(messages, lipgloss.JoinVertical(lipgloss.Left, v.content),
 			baseStyle.
-				Width(m.width).
+				Width(contentWidth).
 				Render(
 					"",
 				),
@@ -256,7 +305,7 @@ func (m *messagesCmp) renderView() {
 
 	m.viewport.SetContent(
 		baseStyle.
-			Width(m.width).
+			Width(contentWidth).
 			Render(
 				lipgloss.JoinVertical(
 					lipgloss.Top,
@@ -306,7 +355,7 @@ func (m *messagesCmp) View() string {
 		Render(
 			lipgloss.JoinVertical(
 				lipgloss.Top,
-				m.viewport.View(),
+				m.renderViewport(),
 				m.working(),
 				m.help(),
 			),
@@ -430,7 +479,7 @@ func (m *messagesCmp) SetSize(width, height int) tea.Cmd {
 	}
 	m.width = width
 	m.height = height
-	m.viewport.Width = width
+	m.viewport.Width = max(0, width-1)
 	m.viewport.Height = height - 2
 	m.attachments.Width = width + 40
 	m.attachments.Height = 3
@@ -472,6 +521,10 @@ func (m *messagesCmp) BindingKeys() []key.Binding {
 	}
 }
 
+func (m *messagesCmp) CapturesMouse() bool {
+	return m.selection.capturesMouse()
+}
+
 func NewMessagesCmp(app *app.App) tea.Model {
 	s := spinner.New()
 	s.Spinner = spinner.Pulse
@@ -482,10 +535,76 @@ func NewMessagesCmp(app *app.App) tea.Model {
 	vp.KeyMap.HalfPageUp = messageKeys.HalfPageUp
 	vp.KeyMap.HalfPageDown = messageKeys.HalfPageDown
 	return &messagesCmp{
-		app:           app,
-		cachedContent: make(map[string]cacheItem),
-		viewport:      vp,
+		app:            app,
+		cachedContent:  make(map[string]cacheItem),
+		expandedBlocks: make(map[string]bool),
+		viewport:       vp,
 		spinner:       s,
 		attachments:   attachmets,
+		clipboard:     newClipboardWriter(),
 	}
+}
+
+// hitTestExpandCollapse checks if a viewport Y coordinate is on an expand/collapse hint line.
+// Returns the block ID to toggle, or empty string if not on a hint.
+func (m *messagesCmp) hitTestExpandCollapse(viewportY int) string {
+	// Convert viewport Y to content line
+	contentY := viewportY + m.viewport.YOffset
+	lines := strings.Split(m.viewport.View(), "\n")
+	if viewportY < 0 || viewportY >= len(lines) {
+		return ""
+	}
+	line := ansi.Strip(lines[viewportY])
+	isExpandHint := strings.Contains(line, "▶ Show all") || strings.Contains(line, "▼ Collapse")
+	if !isExpandHint {
+		return ""
+	}
+
+	// Find which uiMessage this line belongs to
+	lineOffset := 0
+	for _, uiMsg := range m.uiMessages {
+		msgEnd := lineOffset + uiMsg.height
+		if contentY >= lineOffset && contentY < msgEnd {
+			return uiMsg.ID
+		}
+		lineOffset = msgEnd + 1 // +1 for spacing
+	}
+	return ""
+}
+
+func (m *messagesCmp) selectionRegion() selectionRegion {
+	return selectionRegion{
+		X:      0,
+		Y:      0,
+		Width:  m.viewport.Width,
+		Height: m.viewport.Height,
+	}
+}
+
+func (m *messagesCmp) visiblePlainLines() []string {
+	visible := strings.Split(m.viewport.View(), "\n")
+	lines := make([]string, len(visible))
+	for i, line := range visible {
+		lines[i] = ansi.Strip(line)
+	}
+	return lines
+}
+
+func (m *messagesCmp) renderViewport() string {
+	t := theme.CurrentTheme()
+	visible := strings.Split(m.viewport.View(), "\n")
+	for len(visible) < m.viewport.Height {
+		visible = append(visible, "")
+	}
+	if m.selection.hasSelection() {
+		start, end := m.selection.bounds()
+		visible = highlightSelectedLines(visible, start, end, lipgloss.NewStyle().Background(t.BackgroundSecondary()).Foreground(t.Text()))
+	}
+	thumb := calculateScrollbarThumb(m.viewport.Height, m.viewport.TotalLineCount(), m.viewport.YOffset)
+	scrollbar := renderScrollbar(m.viewport.Height, thumb, lipgloss.NewStyle().Foreground(t.BorderNormal()).Render("│"), lipgloss.NewStyle().Foreground(t.Primary()).Render("█"))
+	joined := make([]string, len(visible))
+	for i := range visible {
+		joined[i] = lipgloss.JoinHorizontal(lipgloss.Top, visible[i], scrollbar[i])
+	}
+	return strings.Join(joined, "\n")
 }

@@ -63,6 +63,7 @@ MCP servers, custom agents, plan mode — rendered in a polished terminal interf
 		prompt, _ := cmd.Flags().GetString("prompt")
 		outputFormat, _ := cmd.Flags().GetString("output-format")
 		quiet, _ := cmd.Flags().GetBool("quiet")
+		continueSession, _ := cmd.Flags().GetBool("continue")
 
 		// Validate format option
 		if !format.IsValid(outputFormat) {
@@ -118,8 +119,12 @@ MCP servers, custom agents, plan mode — rendered in a polished terminal interf
 		// Set up the TUI
 		zone.NewGlobal()
 		mouseFilter := newMouseArtifactFilter()
+		var tuiOpts []tui.Option
+		if continueSession {
+			tuiOpts = append(tuiOpts, tui.WithContinueSession())
+		}
 		program := tea.NewProgram(
-			tui.New(app),
+			tui.New(app, tuiOpts...),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 			tea.WithFilter(mouseFilter.filter),
@@ -304,6 +309,9 @@ func init() {
 
 	// Add quiet flag to hide spinner in non-interactive mode
 	rootCmd.Flags().BoolP("quiet", "q", false, "Hide spinner in non-interactive mode")
+
+	// Continue most recent session
+	rootCmd.Flags().Bool("continue", false, "Continue the most recent session")
 
 	// Register custom validation for the format flag
 	rootCmd.RegisterFlagCompletionFunc("output-format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

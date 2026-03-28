@@ -23,6 +23,7 @@ const (
 	EventThinkingDelta EventType = "thinking_delta"
 	EventContentStop   EventType = "content_stop"
 	EventComplete      EventType = "complete"
+	EventInit          EventType = "init"
 	EventError         EventType = "error"
 	EventWarning       EventType = "warning"
 )
@@ -41,6 +42,14 @@ type ProviderResponse struct {
 	FinishReason message.FinishReason
 }
 
+type InitData struct {
+	SlashCommands  []string
+	Tools          []string
+	Model          string
+	PermissionMode string
+	Version        string
+}
+
 type ProviderEvent struct {
 	Type EventType
 
@@ -48,6 +57,7 @@ type ProviderEvent struct {
 	Thinking string
 	Response *ProviderResponse
 	ToolCall *message.ToolCall
+	InitData *InitData
 	Error    error
 }
 type Provider interface {

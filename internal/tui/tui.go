@@ -6,12 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/Krontx/oh-my-claude-code/internal/app"
 	"github.com/Krontx/oh-my-claude-code/internal/config"
 	"github.com/Krontx/oh-my-claude-code/internal/llm/agent"
+	"github.com/Krontx/oh-my-claude-code/internal/llm/provider"
 	"github.com/Krontx/oh-my-claude-code/internal/logging"
 	"github.com/Krontx/oh-my-claude-code/internal/permission"
 	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
@@ -24,6 +22,9 @@ import (
 	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type keyMap struct {
@@ -153,6 +154,7 @@ type appModel struct {
 
 	isCompacting      bool
 	compactingMessage string
+	continueSession   bool
 }
 
 func (a appModel) Init() tea.Cmd {
@@ -178,6 +180,18 @@ func (a appModel) Init() tea.Cmd {
 	cmds = append(cmds, cmd)
 	cmd = a.themeDialog.Init()
 	cmds = append(cmds, cmd)
+
+	// Auto-continue most recent session if requested
+	if a.continueSession {
+		cmds = append(cmds, func() tea.Msg {
+			ctx := context.Background()
+			sessions, err := a.app.Sessions.List(ctx)
+			if err != nil || len(sessions) == 0 {
+				return nil
+			}
+			return chat.SessionSelectedMsg(sessions[0])
+		})
+	}
 
 	// Check if we should show the init dialog
 	cmds = append(cmds, func() tea.Msg {
@@ -337,6 +351,12 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pubsub.Event[agent.AgentEvent]:
 		payload := msg.Payload
+
+		if payload.Type == agent.AgentEventTypeInit && payload.InitData != nil {
+			a.updateSlashCommandsFromInit(payload.InitData)
+			return a, nil
+		}
+
 		if payload.Error != nil {
 			a.isCompacting = false
 			return a, util.ReportError(payload.Error)
@@ -509,20 +529,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
-	case tea.MouseMsg:
-		// On mouse click/press, temporarily disable mouse mode so the terminal
-		// handles text selection natively. Re-enabled on next key event.
-		if msg.Action == tea.MouseActionPress {
-			a.mouseEnabled = false
-			return a, tea.DisableMouse
-		}
-
 	case tea.KeyMsg:
-		// Re-enable mouse mode on any key press if it was disabled for selection
-		if !a.mouseEnabled {
-			a.mouseEnabled = true
-			cmds = append(cmds, tea.EnableMouseCellMotion)
-		}
 		// If multi-arguments dialog is open, let it handle the key press first
 		if a.showMultiArgumentsDialog {
 			args, cmd := a.multiArgumentsDialog.Update(msg)
@@ -1017,7 +1024,15 @@ func (a appModel) View() string {
 	return appView
 }
 
-func New(app *app.App) tea.Model {
+type Option func(*appModel)
+
+func WithContinueSession() Option {
+	return func(m *appModel) {
+		m.continueSession = true
+	}
+}
+
+func New(app *app.App, opts ...Option) tea.Model {
 	startPage := page.ChatPage
 	model := &appModel{
 		currentPage:   startPage,
@@ -1040,6 +1055,10 @@ func New(app *app.App) tea.Model {
 			page.LogsPage: page.NewLogsPage(),
 		},
 		filepicker: dialog.NewFilepickerCmp(app),
+	}
+
+	for _, opt := range opts {
+		opt(model)
 	}
 
 	model.RegisterCommand(dialog.Command{
@@ -1082,9 +1101,15 @@ If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (
 		}
 	}
 
-	// Register slash commands (shown when user types "/")
-	// Internal commands handled by TUI
-	model.slashCommands = []dialog.Command{
+	// Register internal slash commands (TUI handles these directly).
+	// CLI commands will be added dynamically from the init event.
+	model.slashCommands = internalSlashCommands()
+
+	return model
+}
+
+func internalSlashCommands() []dialog.Command {
+	return []dialog.Command{
 		{ID: "model", Title: "/model", Description: "Switch AI model", Handler: func(cmd dialog.Command) tea.Cmd {
 			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "model"})
 		}},
@@ -1103,29 +1128,31 @@ If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (
 		{ID: "help", Title: "/help", Description: "Show help", Handler: func(cmd dialog.Command) tea.Cmd {
 			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "help"})
 		}},
-		// Claude Code CLI commands (sent to agent)
-		{ID: "cc-compact", Title: "/compact", Description: "Compact conversation context", Handler: func(cmd dialog.Command) tea.Cmd {
-			return util.CmdHandler(chat.SendMsg{Text: "/compact"})
-		}},
-		{ID: "cc-review", Title: "/review", Description: "Review code changes", Handler: func(cmd dialog.Command) tea.Cmd {
-			return util.CmdHandler(chat.SendMsg{Text: "/review"})
-		}},
-		{ID: "cc-init", Title: "/init", Description: "Initialize CLAUDE.md for project", Handler: func(cmd dialog.Command) tea.Cmd {
-			return util.CmdHandler(chat.SendMsg{Text: "/init"})
-		}},
-		{ID: "cc-cost", Title: "/cost", Description: "Show session cost", Handler: func(cmd dialog.Command) tea.Cmd {
-			return util.CmdHandler(chat.SendMsg{Text: "/cost"})
-		}},
-		{ID: "cc-context", Title: "/context", Description: "Show context usage", Handler: func(cmd dialog.Command) tea.Cmd {
-			return util.CmdHandler(chat.SendMsg{Text: "/context"})
-		}},
-		{ID: "cc-pr-comments", Title: "/pr-comments", Description: "Review PR comments", Handler: func(cmd dialog.Command) tea.Cmd {
-			return util.CmdHandler(chat.SendMsg{Text: "/pr-comments"})
-		}},
-		{ID: "cc-security-review", Title: "/security-review", Description: "Security review", Handler: func(cmd dialog.Command) tea.Cmd {
-			return util.CmdHandler(chat.SendMsg{Text: "/security-review"})
-		}},
+	}
+}
+
+func (a *appModel) updateSlashCommandsFromInit(initData *provider.InitData) {
+	internalIDs := map[string]bool{
+		"model": true, "sessions": true, "theme": true,
+		"effort": true, "new": true, "help": true,
 	}
 
-	return model
+	cmds := internalSlashCommands()
+
+	for _, cmdName := range initData.SlashCommands {
+		if internalIDs[cmdName] {
+			continue
+		}
+		name := cmdName
+		cmds = append(cmds, dialog.Command{
+			ID:    "cc-" + name,
+			Title: "/" + name,
+			Description: "Claude Code: /" + name,
+			Handler: func(cmd dialog.Command) tea.Cmd {
+				return util.CmdHandler(chat.SendMsg{Text: "/" + name})
+			},
+		})
+	}
+
+	a.slashCommands = cmds
 }

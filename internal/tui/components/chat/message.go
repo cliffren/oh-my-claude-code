@@ -123,6 +123,7 @@ func renderAssistantMessage(
 	isSummary bool,
 	width int,
 	position int,
+	expandedBlocks map[string]bool,
 ) []uiMessage {
 	messages := []uiMessage{}
 	content := msg.Content().String()
@@ -166,12 +167,19 @@ func renderAssistantMessage(
 	}
 	// Render thinking content as a muted block before the main content
 	if thinkingContent != "" {
-		// Truncate very long thinking content to keep UI manageable
-		truncated := thinkingContent
+		thinkingBlockID := msg.ID + "-thinking"
+		expanded := expandedBlocks[thinkingBlockID]
+
+		displayContent := thinkingContent
 		const maxThinkingLines = 20
-		lines := strings.Split(truncated, "\n")
-		if len(lines) > maxThinkingLines {
-			truncated = strings.Join(lines[:maxThinkingLines], "\n") + "\n..."
+		lines := strings.Split(thinkingContent, "\n")
+		totalLines := len(lines)
+		needsTruncation := totalLines > maxThinkingLines
+
+		if !expanded && needsTruncation {
+			displayContent = strings.Join(lines[:maxThinkingLines], "\n") + fmt.Sprintf("\n▶ Show all (%d lines)", totalLines)
+		} else if expanded && needsTruncation {
+			displayContent = thinkingContent + "\n▼ Collapse"
 		}
 
 		thinkingStyle := styles.BaseStyle().
@@ -181,10 +189,10 @@ func renderAssistantMessage(
 			BorderForeground(t.TextMuted()).
 			BorderStyle(lipgloss.ThickBorder())
 
-		thinkingBlock := thinkingStyle.Foreground(t.TextMuted()).Render("Thinking...\n" + truncated)
+		thinkingBlock := thinkingStyle.Foreground(t.TextMuted()).Render("Thinking...\n" + displayContent)
 
 		messages = append(messages, uiMessage{
-			ID:          msg.ID + "-thinking",
+			ID:          thinkingBlockID,
 			messageType: assistantMessageType,
 			position:    position,
 			height:      lipgloss.Height(thinkingBlock),
@@ -223,6 +231,7 @@ func renderAssistantMessage(
 			false,
 			width,
 			i+1,
+			expandedBlocks,
 		)
 		messages = append(messages, toolCallContent)
 		position += toolCallContent.height
@@ -464,7 +473,19 @@ func truncateHeight(content string, height int) string {
 	return content
 }
 
-func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, width int) string {
+func truncateWithHint(content string, height int, expanded bool) string {
+	lines := strings.Split(content, "\n")
+	totalLines := len(lines)
+	if totalLines <= height {
+		return content
+	}
+	if expanded {
+		return content + fmt.Sprintf("\n▼ Collapse (%d lines)", totalLines)
+	}
+	return strings.Join(lines[:height], "\n") + fmt.Sprintf("\n▶ Show all (%d lines)", totalLines)
+}
+
+func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, width int, expanded bool) string {
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 
@@ -477,7 +498,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 			Render(errContent)
 	}
 
-	resultContent := truncateHeight(response.Content, maxResultHeight)
+	resultContent := truncateWithHint(response.Content, maxResultHeight, expanded)
 	switch toolCall.Name {
 	case agent.AgentToolName:
 		return styles.ForceReplaceBackgroundWithLipgloss(
@@ -493,7 +514,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 	case tools.EditToolName:
 		metadata := tools.EditResponseMetadata{}
 		json.Unmarshal([]byte(response.Metadata), &metadata)
-		truncDiff := truncateHeight(metadata.Diff, maxResultHeight)
+		truncDiff := truncateWithHint(metadata.Diff, maxResultHeight, expanded)
 		formattedDiff, _ := diff.FormatDiff(truncDiff, diff.WithTotalWidth(width))
 		return formattedDiff
 	case tools.FetchToolName:
@@ -528,7 +549,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 		} else {
 			ext = strings.ToLower(ext[1:])
 		}
-		resultContent = fmt.Sprintf("```%s\n%s\n```", ext, truncateHeight(metadata.Content, maxResultHeight))
+		resultContent = fmt.Sprintf("```%s\n%s\n```", ext, truncateWithHint(metadata.Content, maxResultHeight, expanded))
 		return styles.ForceReplaceBackgroundWithLipgloss(
 			toMarkdown(resultContent, true, width),
 			t.Background(),
@@ -544,7 +565,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 		} else {
 			ext = strings.ToLower(ext[1:])
 		}
-		resultContent = fmt.Sprintf("```%s\n%s\n```", ext, truncateHeight(params.Content, maxResultHeight))
+		resultContent = fmt.Sprintf("```%s\n%s\n```", ext, truncateWithHint(params.Content, maxResultHeight, expanded))
 		return styles.ForceReplaceBackgroundWithLipgloss(
 			toMarkdown(resultContent, true, width),
 			t.Background(),
@@ -566,6 +587,7 @@ func renderToolMessage(
 	nested bool,
 	width int,
 	position int,
+	expandedBlocks map[string]bool,
 ) uiMessage {
 	if nested {
 		width = width - 3
@@ -607,7 +629,9 @@ func renderToolMessage(
 	params := renderToolParams(width-2-lipgloss.Width(toolNameText), toolCall)
 	responseContent := ""
 	if response != nil {
-		responseContent = renderToolResponse(toolCall, *response, width-2)
+		toolBlockID := toolCall.ID
+		isExpanded := expandedBlocks[toolBlockID]
+		responseContent = renderToolResponse(toolCall, *response, width-2, isExpanded)
 		responseContent = strings.TrimSuffix(responseContent, "\n")
 	} else {
 		responseContent = baseStyle.
@@ -643,7 +667,7 @@ func renderToolMessage(
 			toolCalls = append(toolCalls, v.ToolCalls()...)
 		}
 		for _, call := range toolCalls {
-			rendered := renderToolMessage(call, []message.Message{}, messagesService, focusedUIMessageId, true, width, 0)
+			rendered := renderToolMessage(call, []message.Message{}, messagesService, focusedUIMessageId, true, width, 0, expandedBlocks)
 			parts = append(parts, rendered.content)
 		}
 	}

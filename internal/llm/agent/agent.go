@@ -32,6 +32,7 @@ const (
 	AgentEventTypeError     AgentEventType = "error"
 	AgentEventTypeResponse  AgentEventType = "response"
 	AgentEventTypeSummarize AgentEventType = "summarize"
+	AgentEventTypeInit      AgentEventType = "init"
 )
 
 type AgentEvent struct {
@@ -43,6 +44,9 @@ type AgentEvent struct {
 	SessionID string
 	Progress  string
 	Done      bool
+
+	// From CLI init event
+	InitData *provider.InitData
 }
 
 type Service interface {
@@ -466,6 +470,14 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	}
 
 	switch event.Type {
+	case provider.EventInit:
+		if event.InitData != nil {
+			a.Publish(pubsub.CreatedEvent, AgentEvent{
+				Type:     AgentEventTypeInit,
+				InitData: event.InitData,
+			})
+		}
+		return nil
 	case provider.EventThinkingDelta:
 		assistantMsg.AppendReasoningContent(event.Thinking)
 		return a.messages.Update(ctx, *assistantMsg)

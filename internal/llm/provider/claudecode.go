@@ -26,6 +26,12 @@ type claudeEvent struct {
 	SessionID string         `json:"session_id,omitempty"`
 	Event     *streamEvent   `json:"event,omitempty"`
 	Message   *claudeMessage `json:"message,omitempty"`
+	// Init fields (only present when type == "system", subtype == "init")
+	SlashCommands     []string `json:"slash_commands,omitempty"`
+	Tools             []string `json:"tools,omitempty"`
+	Model             string   `json:"model,omitempty"`
+	PermissionModeStr string   `json:"permissionMode,omitempty"`
+	ClaudeCodeVersion string   `json:"claude_code_version,omitempty"`
 	// Result fields (only present when type == "result")
 	DurationMs    int64        `json:"duration_ms,omitempty"`
 	DurationApiMs int64        `json:"duration_api_ms,omitempty"`
@@ -249,10 +255,22 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 
 		switch event.Type {
 		case "system":
-			if event.Subtype == "init" && event.SessionID != "" {
-				c.mu.Lock()
-				c.sessionID = event.SessionID
-				c.mu.Unlock()
+			if event.Subtype == "init" {
+				if event.SessionID != "" {
+					c.mu.Lock()
+					c.sessionID = event.SessionID
+					c.mu.Unlock()
+				}
+				eventChan <- ProviderEvent{
+					Type: EventInit,
+					InitData: &InitData{
+						SlashCommands:  event.SlashCommands,
+						Tools:          event.Tools,
+						Model:          event.Model,
+						PermissionMode: event.PermissionModeStr,
+						Version:        event.ClaudeCodeVersion,
+					},
+				}
 			}
 
 		case "stream_event":
