@@ -498,7 +498,27 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	// 	}
 	case provider.EventToolUseStop:
 		assistantMsg.FinishToolCall(event.ToolCall.ID)
-		return a.messages.Update(ctx, *assistantMsg)
+		if err := a.messages.Update(ctx, *assistantMsg); err != nil {
+			return err
+		}
+		// When CLI provides tool result content, store it as a tool message
+		// so the TUI can display it via findToolResponse().
+		if event.Content != "" {
+			_, err := a.messages.Create(ctx, sessionID, message.CreateMessageParams{
+				Role: message.Tool,
+				Parts: []message.ContentPart{
+					message.ToolResult{
+						ToolCallID: event.ToolCall.ID,
+						Content:    event.Content,
+						IsError:    false,
+					},
+				},
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	case provider.EventError:
 		if errors.Is(event.Error, context.Canceled) {
 			logging.InfoPersist(fmt.Sprintf("Event processing canceled for session: %s", sessionID))

@@ -389,14 +389,48 @@ func (c *claudeCodeClient) handleToolResults(msg *claudeMessage, eventChan chan<
 	for _, block := range blocks {
 		if block.Type == "tool_result" && block.ToolUseID != "" {
 			delete(activeToolCalls, block.ToolUseID)
+
+			// Extract tool result content
+			resultContent := extractToolResultContent(block.Content)
+
 			eventChan <- ProviderEvent{
-				Type: EventToolUseStop,
+				Type:    EventToolUseStop,
+				Content: resultContent,
 				ToolCall: &message.ToolCall{
 					ID:       block.ToolUseID,
 					Finished: true,
 				},
 			}
 		}
+	}
+}
+
+// extractToolResultContent extracts text from a tool_result content field,
+// which can be a string, an array of content blocks, or nil.
+func extractToolResultContent(content any) string {
+	if content == nil {
+		return ""
+	}
+	switch v := content.(type) {
+	case string:
+		return v
+	case []any:
+		var parts []string
+		for _, item := range v {
+			if m, ok := item.(map[string]any); ok {
+				if t, ok := m["text"].(string); ok {
+					parts = append(parts, t)
+				}
+			}
+		}
+		return strings.Join(parts, "\n")
+	default:
+		// Try JSON marshal as fallback
+		b, err := json.Marshal(content)
+		if err != nil {
+			return fmt.Sprintf("%v", content)
+		}
+		return string(b)
 	}
 }
 
