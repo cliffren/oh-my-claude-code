@@ -8,8 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"regexp"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	runewidth "github.com/mattn/go-runewidth"
 	"github.com/Krontx/oh-my-claude-code/internal/config"
 	"github.com/Krontx/oh-my-claude-code/internal/diff"
 	"github.com/Krontx/oh-my-claude-code/internal/llm/agent"
@@ -105,12 +108,19 @@ func compactTable(rows []string) []string {
 		return rows
 	}
 
-	// Calculate column widths
+	// Strip markdown from cells (bold/italic won't render in code blocks)
+	for i, row := range parsed {
+		for j, cell := range row {
+			parsed[i][j] = stripInlineMarkdown(cell)
+		}
+	}
+
+	// Calculate column widths using display width (CJK = 2 columns)
 	numCols := len(parsed[0])
 	widths := make([]int, numCols)
 	for _, row := range parsed {
 		for j := 0; j < len(row) && j < numCols; j++ {
-			w := len([]rune(row[j]))
+			w := runewidth.StringWidth(row[j])
 			if w > widths[j] {
 				widths[j] = w
 			}
@@ -127,8 +137,8 @@ func compactTable(rows []string) []string {
 			if j < len(row) {
 				cell = row[j]
 			}
-			runes := []rune(cell)
-			padding := widths[j] - len(runes)
+			displayW := runewidth.StringWidth(cell)
+			padding := widths[j] - displayW
 			if padding < 0 {
 				padding = 0
 			}
@@ -158,6 +168,14 @@ func parseTableCells(row string) []string {
 		cells[i] = strings.TrimSpace(p)
 	}
 	return cells
+}
+
+var mdInlineRe = regexp.MustCompile(`(\*\*|__|\*|_|~~|` + "`" + `)`)
+
+// stripInlineMarkdown removes inline markdown markers (bold, italic, code, strikethrough)
+// from a cell string so they render cleanly in a plain code block.
+func stripInlineMarkdown(s string) string {
+	return mdInlineRe.ReplaceAllString(s, "")
 }
 
 func renderMessage(msg string, isUser bool, isFocused bool, width int, info ...string) string {
