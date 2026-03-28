@@ -48,6 +48,10 @@ type (
 		TTL  time.Duration
 	}
 	ClearStatusMsg struct{}
+
+	PermissionModeChangedMsg struct {
+		Mode string
+	}
 )
 
 func Clamp(v, low, high int) int {

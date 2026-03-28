@@ -434,7 +434,10 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if err := a.app.CoderAgent.UpdatePermissionMode(msg.Mode); err != nil {
 			return a, util.ReportError(err)
 		}
-		return a, util.ReportInfo(fmt.Sprintf("Permission mode changed to %s", msg.Mode))
+		return a, tea.Batch(
+			util.CmdHandler(util.PermissionModeChangedMsg{Mode: msg.Mode}),
+			util.ReportInfo(fmt.Sprintf("Permission mode changed to %s", msg.Mode)),
+		)
 
 	case chat.ShowSlashCompletionMsg:
 		if a.currentPage == page.ChatPage && !a.showCommandDialog {

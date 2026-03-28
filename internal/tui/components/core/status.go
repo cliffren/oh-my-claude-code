@@ -24,11 +24,12 @@ type StatusCmp interface {
 }
 
 type statusCmp struct {
-	info       util.InfoMsg
-	width      int
-	messageTTL time.Duration
-	lspClients map[string]*lsp.Client
-	session    session.Session
+	info           util.InfoMsg
+	width          int
+	messageTTL     time.Duration
+	lspClients     map[string]*lsp.Client
+	session        session.Session
+	permissionMode string // "" means default
 }
 
 // clearMessageCmd is a command that clears status messages after a timeout
@@ -66,6 +67,8 @@ func (m statusCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.clearMessageCmd(ttl)
 	case util.ClearStatusMsg:
 		m.info = util.InfoMsg{}
+	case util.PermissionModeChangedMsg:
+		m.permissionMode = msg.Mode
 	}
 	return m, nil
 }
@@ -175,6 +178,7 @@ func (m statusCmp) View() string {
 	}
 
 	status += diagnostics
+	status += m.permissionModeWidget()
 	status += m.model()
 	return status
 }
@@ -264,6 +268,33 @@ func (m statusCmp) availableFooterMsgWidth(diagnostics, tokenInfo string) int {
 		tokensWidth = lipgloss.Width(tokenInfo) + 2
 	}
 	return max(0, m.width-lipgloss.Width(helpWidget)-lipgloss.Width(m.model())-lipgloss.Width(diagnostics)-tokensWidth)
+}
+
+func (m statusCmp) permissionModeWidget() string {
+	mode := m.permissionMode
+	if mode == "" || mode == "default" {
+		return ""
+	}
+	t := theme.CurrentTheme()
+
+	var label string
+	s := styles.Padded().Foreground(t.Background()).Bold(true)
+	switch mode {
+	case "acceptEdits":
+		label = "AcceptEdits"
+		s = s.Background(t.Info())
+	case "bypassPermissions":
+		label = "BypassAll"
+		s = s.Background(t.Warning())
+	case "plan":
+		label = "PlanOnly"
+		s = s.Background(t.Secondary())
+	default:
+		label = mode
+		s = s.Background(t.TextMuted())
+	}
+
+	return s.Render(label)
 }
 
 func (m statusCmp) model() string {
