@@ -144,8 +144,12 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
-		// Consume all mouse events — don't let them reach the textarea.
-		// The editor doesn't need mouse scroll; click just keeps focus.
+		// On left click, temporarily disable TUI mouse so the terminal can
+		// handle native text selection in the editor. Other mouse events are
+		// discarded — the editor doesn't use scroll.
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			return m, util.CmdHandler(util.DisableMouseForSelectionMsg{})
+		}
 		return m, nil
 	case dialog.ThemeChangedMsg:
 		m.textarea = CreateTextArea(&m.textarea)

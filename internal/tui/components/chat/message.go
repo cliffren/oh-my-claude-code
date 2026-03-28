@@ -760,10 +760,10 @@ func renderToolMessage(
 		return toolMsg
 	}
 
+	toolBlockID := toolCall.ID
 	params := renderToolParams(width-2-lipgloss.Width(toolNameText), toolCall)
 	responseContent := ""
 	if response != nil {
-		toolBlockID := toolCall.ID
 		isExpanded := expandedBlocks[toolBlockID]
 		responseContent = renderToolResponse(toolCall, *response, width-2, isExpanded)
 		responseContent = strings.TrimSuffix(responseContent, "\n")
@@ -822,6 +822,7 @@ func renderToolMessage(
 		)
 	}
 	toolMsg := uiMessage{
+		ID:          toolBlockID,
 		messageType: toolMessageType,
 		position:    position,
 		height:      lipgloss.Height(content),

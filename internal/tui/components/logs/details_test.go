@@ -35,7 +35,7 @@ func TestLogsDetailsCopiesSelectedViewportText(t *testing.T) {
 	if copied != "hello" {
 		t.Fatalf("got copied text %q want %q", copied, "hello")
 	}
-	if !cmp.selection.hasSelection() {
-		t.Fatal("expected selection to remain visible after release")
+	if cmp.selection.hasSelection() {
+		t.Fatal("expected selection to be cleared after release (auto-copy clears selection)")
 	}
 }

@@ -128,6 +128,7 @@ func (c *Controller) HandleMouse(msg tea.MouseMsg, region Region, lines []string
 				return false, selected, false, err
 			}
 		}
+		c.Clear() // clear selection highlight after copy
 		return false, selected, true, nil
 	}
 	return c.active, "", false, nil

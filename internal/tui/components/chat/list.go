@@ -96,12 +96,20 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.expandedBlocks[msg.BlockID] = true
 		}
-		// Find the parent message ID and invalidate its cache
+		// Find the parent message ID and invalidate its cache.
+		// Thinking blocks use ID = msgID+"-thinking" so prefix match works.
+		// Tool call blocks use toolCall.ID which doesn't share a prefix with
+		// the parent message ID, so we clear all cache as a fallback.
+		found := false
 		for _, mm := range m.messages {
 			if strings.HasPrefix(msg.BlockID, mm.ID) {
 				delete(m.cachedContent, mm.ID)
+				found = true
 				break
 			}
+		}
+		if !found {
+			m.cachedContent = make(map[string]cacheItem)
 		}
 		m.renderView()
 		return m, nil
@@ -136,9 +144,13 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		_, _, _, err := m.selection.handleMouse(msg, m.selectionRegion(), m.visiblePlainLines(), m.clipboard)
+		_, _, copied, err := m.selection.handleMouse(msg, m.selectionRegion(), m.visiblePlainLines(), m.clipboard)
 		if err != nil {
 			cmds = append(cmds, util.ReportError(err))
+		}
+		if copied {
+			cmds = append(cmds, util.ReportInfo("Copied to clipboard"))
+			m.renderView() // refresh to clear selection highlight
 		}
 		if m.selection.capturesMouse() || msg.Action == tea.MouseActionRelease {
 			break

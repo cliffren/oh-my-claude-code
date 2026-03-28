@@ -52,6 +52,11 @@ type (
 	PermissionModeChangedMsg struct {
 		Mode string
 	}
+
+	// DisableMouseForSelectionMsg is sent by components (e.g. editor) when the
+	// user clicks so the top-level TUI can temporarily disable mouse capture,
+	// allowing the terminal to handle native text selection.
+	DisableMouseForSelectionMsg struct{}
 )
 
 func Clamp(v, low, high int) int {

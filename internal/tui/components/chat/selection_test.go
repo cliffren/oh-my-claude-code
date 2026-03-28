@@ -227,7 +227,7 @@ func TestSelectionRemainsVisibleAfterRelease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("release returned error: %v", err)
 	}
-	if !controller.hasSelection() {
-		t.Fatal("expected selection to remain visible after release")
+	if controller.hasSelection() {
+		t.Fatal("expected selection to be cleared after release (auto-copy clears selection)")
 	}
 }

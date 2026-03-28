@@ -45,9 +45,21 @@ type keyMap struct {
 
 type startCompactSessionMsg struct{}
 
+// reenableMouseMsg is sent on a timer to re-enable TUI mouse after it was
+// temporarily disabled to allow native terminal text selection.
+type reenableMouseMsg struct{}
+
 const (
-	quitKey = "q"
+	quitKey              = "q"
+	mouseSelectionTimeout = 2 * time.Second
 )
+
+func reenableMouseAfter(d time.Duration) tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(d)
+		return reenableMouseMsg{}
+	}
+}
 
 var keys = keyMap{
 	Logs: key.NewBinding(
@@ -334,6 +346,18 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case dialog.CloseQuitMsg:
 		a.showQuit = false
+		return a, nil
+
+	case util.DisableMouseForSelectionMsg:
+		// Editor was clicked — disable TUI mouse so terminal handles selection.
+		a.mouseEnabled = false
+		return a, tea.Batch(tea.DisableMouse, reenableMouseAfter(mouseSelectionTimeout))
+
+	case reenableMouseMsg:
+		if !a.mouseEnabled {
+			a.mouseEnabled = true
+			return a, tea.EnableMouseCellMotion
+		}
 		return a, nil
 
 	case dialog.CloseSessionDialogMsg:
