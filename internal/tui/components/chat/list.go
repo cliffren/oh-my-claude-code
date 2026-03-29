@@ -567,7 +567,10 @@ func (m *messagesCmp) hitTestExpandCollapse(viewportY int) string {
 		return ""
 	}
 	line := ansi.Strip(lines[viewportY])
-	isExpandHint := strings.HasPrefix(line, "▶ ") || strings.HasPrefix(line, "▼ ")
+	// Strip the left border character (┃ from ThickBorder, │ from NormalBorder) and
+	// any leading spaces added by PaddingLeft, then check for expand/collapse prefix.
+	trimmedLine := strings.TrimLeft(line, "┃│ \t")
+	isExpandHint := strings.HasPrefix(trimmedLine, "▶ ") || strings.HasPrefix(trimmedLine, "▼ ")
 	if !isExpandHint {
 		return ""
 	}
@@ -577,6 +580,13 @@ func (m *messagesCmp) hitTestExpandCollapse(viewportY int) string {
 	for _, uiMsg := range m.uiMessages {
 		msgEnd := lineOffset + uiMsg.height
 		if contentY >= lineOffset && contentY < msgEnd {
+			// Check subBlocks for a more specific match (e.g. individual tool calls within a group)
+			localLine := contentY - lineOffset
+			for _, sub := range uiMsg.subBlocks {
+				if localLine == sub.lineOffset {
+					return sub.id
+				}
+			}
 			return uiMsg.ID
 		}
 		lineOffset = msgEnd + 1 // +1 for spacing

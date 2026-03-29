@@ -33,12 +33,19 @@ const (
 	maxResultHeight = 10
 )
 
+// subBlock maps a line offset within a uiMessage to a toggleable block ID.
+type subBlock struct {
+	lineOffset int // line offset within the parent uiMessage content
+	id         string
+}
+
 type uiMessage struct {
 	ID          string
 	messageType uiMessageType
 	position    int
 	height      int
 	content     string
+	subBlocks   []subBlock // optional: nested expand/collapse targets
 }
 
 func toMarkdown(content string, focused bool, width int) string {
@@ -337,7 +344,32 @@ func renderAssistantMessage(
 	}
 
 	hasToolCalls := len(msg.ToolCalls()) > 0
-	if content != "" || (finished && finishData.Reason == message.FinishReasonEndTurn && !hasToolCalls) {
+
+	// Tool calls render BEFORE text content (tools execute first, then the reply)
+	toolCalls := msg.ToolCalls()
+	if len(toolCalls) > 0 {
+		// Attach model/timing info to the group when there is no text content
+		var groupInfo []string
+		if content == "" {
+			groupInfo = info
+		}
+		groupMsg := renderToolCallsGroup(
+			msg.ID,
+			toolCalls,
+			allMessages,
+			messagesService,
+			focusedUIMessageId,
+			width,
+			position,
+			expandedBlocks,
+			groupInfo,
+		)
+		messages = append(messages, groupMsg)
+		position += groupMsg.height
+		position++ // for the space
+	}
+
+	if content != "" || (finished && finishData.Reason == message.FinishReasonEndTurn && !hasToolCalls && thinkingContent == "") {
 		if content == "" {
 			content = "*Finished without output*"
 		}
@@ -354,29 +386,6 @@ func renderAssistantMessage(
 			content:     content,
 		})
 		position += messages[len(messages)-1].height
-		position++ // for the space
-	}
-
-	toolCalls := msg.ToolCalls()
-	for i, toolCall := range toolCalls {
-		// Attach model/timing info to the last tool call when there is no text content
-		var toolInfo []string
-		if i == len(toolCalls)-1 && hasToolCalls && content == "" {
-			toolInfo = info
-		}
-		toolCallContent := renderToolMessage(
-			toolCall,
-			allMessages,
-			messagesService,
-			focusedUIMessageId,
-			false,
-			width,
-			i+1,
-			expandedBlocks,
-			toolInfo,
-		)
-		messages = append(messages, toolCallContent)
-		position += toolCallContent.height
 		position++ // for the space
 	}
 	return messages
@@ -718,6 +727,131 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 			toMarkdown(resultContent, true, width),
 			t.Background(),
 		)
+	}
+}
+
+// renderToolCallsGroup renders all tool calls from one assistant message as a single collapsible block.
+// Collapsed: shows "▶ N tool calls (Tool1, Tool2, ...)" summary line.
+// Expanded: shows each tool call's name, params, and response.
+func renderToolCallsGroup(
+	msgID string,
+	toolCalls []message.ToolCall,
+	allMessages []message.Message,
+	messagesService message.Service,
+	focusedUIMessageId string,
+	width int,
+	position int,
+	expandedBlocks map[string]bool,
+	infoLines []string,
+) uiMessage {
+	t := theme.CurrentTheme()
+	baseStyle := styles.BaseStyle()
+
+	groupBlockID := msgID + "-toolcalls"
+	isExpanded := expandedBlocks[groupBlockID]
+
+	style := baseStyle.
+		Width(width - 1).
+		BorderLeft(true).
+		BorderStyle(lipgloss.ThickBorder()).
+		PaddingLeft(1).
+		BorderForeground(t.TextMuted())
+
+	// Build summary of tool names
+	names := make([]string, len(toolCalls))
+	for i, tc := range toolCalls {
+		names[i] = toolName(tc.Name)
+	}
+
+	expandIndicator := "▶ "
+	if isExpanded {
+		expandIndicator = "▼ "
+	}
+
+	n := len(toolCalls)
+	suffix := "s"
+	if n == 1 {
+		suffix = ""
+	}
+	headerText := fmt.Sprintf("%s%d tool call%s", expandIndicator, n, suffix)
+	if n <= 4 {
+		headerText += " (" + strings.Join(names, ", ") + ")"
+	}
+
+	parts := []string{
+		baseStyle.Foreground(t.TextMuted()).Render(headerText),
+	}
+
+	// Track line count for subBlock hit-testing.
+	// Start after the header line. The border/padding adds 0 extra lines.
+	lineCount := 1 // header is 1 line
+	var subs []subBlock
+
+	if isExpanded {
+		for i, tc := range toolCalls {
+			if i > 0 {
+				sep := baseStyle.Width(width-3).Foreground(t.TextMuted()).Render("──────────")
+				parts = append(parts, sep)
+				lineCount += lipgloss.Height(sep)
+			}
+			if !tc.Finished {
+				action := getToolAction(tc.Name)
+				line := baseStyle.Foreground(t.TextMuted()).
+					Render(fmt.Sprintf("%s: %s", toolName(tc.Name), action))
+				parts = append(parts, line)
+				lineCount += lipgloss.Height(line)
+				continue
+			}
+			// Each tool call has its own ▶/▼ toggle for the response
+			tcExpanded := expandedBlocks[tc.ID]
+			tcIndicator := "▶ "
+			if tcExpanded {
+				tcIndicator = "▼ "
+			}
+			params := renderToolParams(width-8, tc)
+			tcHeader := baseStyle.Foreground(t.TextMuted()).
+				Render(fmt.Sprintf("%s%s: %s", tcIndicator, toolName(tc.Name), params))
+			subs = append(subs, subBlock{lineOffset: lineCount, id: tc.ID})
+			parts = append(parts, tcHeader)
+			lineCount += lipgloss.Height(tcHeader)
+			// Response (only when this tool call is expanded)
+			if tcExpanded {
+				response := findToolResponse(tc.ID, allMessages)
+				if response != nil {
+					respContent := renderToolResponse(tc, *response, width-4)
+					respContent = strings.TrimSuffix(respContent, "\n")
+					if respContent != "" {
+						parts = append(parts, respContent)
+						lineCount += lipgloss.Height(respContent)
+					}
+				}
+				// Nested agent tool calls
+				if tc.Name == agent.AgentToolName {
+					taskMessages, _ := messagesService.List(context.Background(), tc.ID)
+					for _, tm := range taskMessages {
+						for _, call := range tm.ToolCalls() {
+							rendered := renderToolMessage(call, []message.Message{}, messagesService, focusedUIMessageId, true, width, 0, expandedBlocks, nil)
+							parts = append(parts, rendered.content)
+							lineCount += lipgloss.Height(rendered.content)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for _, line := range infoLines {
+		parts = append(parts, line)
+	}
+
+	content := style.Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
+	return uiMessage{
+		ID:          groupBlockID,
+		messageType: toolMessageType,
+		subBlocks:   subs,
+		position:    position,
+		height:      lipgloss.Height(content),
+		content:     content,
 	}
 }
 

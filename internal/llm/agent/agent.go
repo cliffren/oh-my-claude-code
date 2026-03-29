@@ -531,7 +531,13 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		logging.ErrorPersist(event.Error.Error())
 		return event.Error
 	case provider.EventComplete:
-		assistantMsg.SetToolCalls(event.Response.ToolCalls)
+		// Only replace tool calls if the completion event provides them.
+		// Some providers return an empty ToolCalls slice at completion even
+		// though tool calls were streamed incrementally via EventToolUseStart/Stop.
+		// Calling SetToolCalls with an empty slice would wipe the accumulated calls.
+		if len(event.Response.ToolCalls) > 0 {
+			assistantMsg.SetToolCalls(event.Response.ToolCalls)
+		}
 		assistantMsg.AddFinish(event.Response.FinishReason)
 		if err := a.messages.Update(ctx, *assistantMsg); err != nil {
 			return fmt.Errorf("failed to update message: %w", err)
