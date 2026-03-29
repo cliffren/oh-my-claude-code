@@ -28,6 +28,8 @@ type chatPage struct {
 	session              session.Session
 	completionDialog     dialog.CompletionDialog
 	showCompletionDialog bool
+	slashDialog          dialog.CommandDialog
+	showSlashDialog      bool
 }
 
 // PhysicalCursorPos returns the 1-indexed terminal (row, col) for the text
@@ -73,6 +75,7 @@ func (p *chatPage) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		p.layout.Init(),
 		p.completionDialog.Init(),
+		p.slashDialog.Init(),
 	}
 	return tea.Batch(cmds...)
 }
@@ -85,6 +88,14 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	case dialog.CompletionDialogCloseMsg:
 		p.showCompletionDialog = false
+	case chat.ShowSlashMenuMsg:
+		p.slashDialog.SetCommands(msg.Commands)
+		p.showSlashDialog = true
+		return p, nil
+	case chat.InsertEditorTextMsg:
+		p.showSlashDialog = false
+	case chat.InternalSlashCommandMsg:
+		p.showSlashDialog = false
 	case chat.SendMsg:
 		cmd := p.sendMessage(msg.Text, msg.Attachments)
 		if cmd != nil {
@@ -124,6 +135,30 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, p.clearSidebar())
 		// Continue propagation to child components (list, status, etc.)
 	case tea.KeyMsg:
+		if p.showSlashDialog {
+			switch msg.String() {
+			case "enter":
+				if cmd, ok := p.slashDialog.GetSelected(); ok && cmd.Handler != nil {
+					p.showSlashDialog = false
+					return p, cmd.Handler(cmd)
+				}
+				p.showSlashDialog = false
+				return p, nil
+			case "esc":
+				p.showSlashDialog = false
+				return p, nil
+			case "up", "down":
+				d, dCmd := p.slashDialog.Update(msg)
+				p.slashDialog = d.(dialog.CommandDialog)
+				cmds = append(cmds, dCmd)
+				return p, tea.Batch(cmds...)
+			default:
+				d, dCmd := p.slashDialog.Update(msg)
+				p.slashDialog = d.(dialog.CommandDialog)
+				cmds = append(cmds, dCmd)
+				return p, tea.Batch(cmds...)
+			}
+		}
 		switch {
 		case key.Matches(msg, keyMap.ShowCompletionDialog):
 			p.showCompletionDialog = true
@@ -214,13 +249,30 @@ func (p *chatPage) GetSize() (int, int) {
 func (p *chatPage) View() string {
 	layoutView := p.layout.View()
 
-	if p.showCompletionDialog {
-		_, layoutHeight := p.layout.GetSize()
-		editorWidth, editorHeight := p.editor.GetSize()
+	_, layoutHeight := p.layout.GetSize()
+	_, editorHeight := p.editor.GetSize()
 
+	if p.showCompletionDialog {
+		editorWidth, _ := p.editor.GetSize()
 		p.completionDialog.SetWidth(editorWidth)
 		overlay := p.completionDialog.View()
+		layoutView = layout.PlaceOverlay(
+			0,
+			layoutHeight-editorHeight-lipgloss.Height(overlay),
+			overlay,
+			layoutView,
+			false,
+		)
+	}
 
+	if p.showSlashDialog {
+		// 内联菜单高度 = 编辑器上方可用空间的 80%，去掉搜索框/分隔符/边框占用的 7 行
+		availItems := int(float64(layoutHeight-editorHeight)*0.4) - 7
+		if availItems < 1 {
+			availItems = 1
+		}
+		p.slashDialog.SetMaxVisible(availItems)
+		overlay := p.slashDialog.View()
 		layoutView = layout.PlaceOverlay(
 			0,
 			layoutHeight-editorHeight-lipgloss.Height(overlay),
@@ -243,6 +295,7 @@ func (p *chatPage) BindingKeys() []key.Binding {
 func NewChatPage(app *app.App) tea.Model {
 	cg := completions.NewFileAndFolderContextGroup()
 	completionDialog := dialog.NewCompletionDialogCmp(cg)
+	slashDialog := dialog.NewCommandDialogCmp(6, 1)
 
 	messagesContainer := layout.NewContainer(
 		chat.NewMessagesCmp(app),
@@ -259,9 +312,11 @@ func NewChatPage(app *app.App) tea.Model {
 		editorCmp:        editorCmpInstance,
 		messages:         messagesContainer,
 		completionDialog: completionDialog,
+		slashDialog:      slashDialog,
 		layout: layout.NewSplitPane(
 			layout.WithLeftPanel(messagesContainer),
 			layout.WithBottomPanel(editorContainer),
+			layout.WithBottomExtraLines(1),
 		),
 	}
 }

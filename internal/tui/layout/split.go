@@ -21,10 +21,11 @@ type SplitPaneLayout interface {
 }
 
 type splitPaneLayout struct {
-	width         int
-	height        int
-	ratio         float64
-	verticalRatio float64
+	width            int
+	height           int
+	ratio            float64
+	verticalRatio    float64
+	bottomExtraLines int // extra rows added to bottom panel beyond ratio
 
 	rightPanel  Container
 	leftPanel   Container
@@ -234,7 +235,7 @@ func (s *splitPaneLayout) SetSize(width, height int) tea.Cmd {
 
 func (s *splitPaneLayout) sectionHeights() (int, int) {
 	if s.bottomPanel != nil {
-		topHeight := int(float64(s.height) * s.verticalRatio)
+		topHeight := int(float64(s.height)*s.verticalRatio) - s.bottomExtraLines
 		return topHeight, s.height - topHeight
 	}
 	return s.height, 0
@@ -364,6 +365,12 @@ func WithRightPanel(panel Container) SplitPaneOption {
 func WithRatio(ratio float64) SplitPaneOption {
 	return func(s *splitPaneLayout) {
 		s.ratio = ratio
+	}
+}
+
+func WithBottomExtraLines(n int) SplitPaneOption {
+	return func(s *splitPaneLayout) {
+		s.bottomExtraLines = n
 	}
 }
 

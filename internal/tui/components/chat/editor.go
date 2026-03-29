@@ -159,6 +159,10 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.textarea.SetValue(modifiedValue)
 		return m, nil
+	case InsertEditorTextMsg:
+		m.textarea.SetValue(msg.Text)
+		m.textarea.CursorEnd()
+		return m, nil
 	case SessionSelectedMsg:
 		if msg.ID != m.session.ID {
 			m.session = msg

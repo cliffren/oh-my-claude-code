@@ -473,11 +473,20 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case chat.ShowSlashCompletionMsg:
 		if a.currentPage == page.ChatPage && !a.showCommandDialog {
-			allCmds := make([]dialog.Command, len(a.commands))
-			copy(allCmds, a.commands)
-			allCmds = append(allCmds, a.slashCommands...)
-			a.commandDialog.SetCommands(allCmds)
-			a.showCommandDialog = true
+			// Build slash menu commands: CLI commands insert into editor, TUI commands execute directly.
+			slashMenuCmds := make([]dialog.Command, 0, len(a.slashCommands))
+			for _, cmd := range a.slashCommands {
+				menuCmd := cmd
+				menuCmd.Description = ""
+				if cmd.Category == "Claude Code" {
+					name := strings.TrimPrefix(cmd.Title, "/")
+					menuCmd.Handler = func(_ dialog.Command) tea.Cmd {
+						return util.CmdHandler(chat.InsertEditorTextMsg{Text: "/" + name + " "})
+					}
+				}
+				slashMenuCmds = append(slashMenuCmds, menuCmd)
+			}
+			return a, util.CmdHandler(chat.ShowSlashMenuMsg{Commands: slashMenuCmds})
 		}
 		return a, nil
 

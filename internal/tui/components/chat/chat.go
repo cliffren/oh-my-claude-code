@@ -9,6 +9,7 @@ import (
 	"github.com/Krontx/oh-my-claude-code/internal/config"
 	"github.com/Krontx/oh-my-claude-code/internal/message"
 	"github.com/Krontx/oh-my-claude-code/internal/session"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/components/dialog"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/Krontx/oh-my-claude-code/internal/version"
@@ -25,6 +26,16 @@ type SessionClearedMsg struct{}
 
 // ShowSlashCompletionMsg is emitted when "/" is typed into an empty editor.
 type ShowSlashCompletionMsg struct{}
+
+// ShowSlashMenuMsg asks the chat page to display the inline slash command menu.
+type ShowSlashMenuMsg struct {
+	Commands []dialog.Command
+}
+
+// InsertEditorTextMsg asks the editor to insert text (e.g. "/compact ") at the cursor.
+type InsertEditorTextMsg struct {
+	Text string
+}
 
 type InternalSlashCommandMsg struct {
 	Command string

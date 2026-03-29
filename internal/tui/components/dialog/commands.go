@@ -62,6 +62,8 @@ type CommandDialog interface {
 	tea.Model
 	layout.Bindings
 	SetCommands(commands []Command)
+	GetSelected() (Command, bool)
+	SetMaxVisible(n int)
 }
 
 type commandDialogCmp struct {
@@ -70,6 +72,7 @@ type commandDialogCmp struct {
 	filtered     []Command
 	selectedIdx  int
 	maxVisible   int
+	linesPerItem int // 1 = no descriptions, 2 = with descriptions (default)
 	fixedWidth   int // computed once in SetCommands, stays constant
 	width        int
 	height       int
@@ -235,9 +238,9 @@ func (c *commandDialogCmp) View() string {
 		innerContent = lipgloss.JoinVertical(lipgloss.Left, listItems...)
 	}
 
-	// Fixed-height list area: 2 lines per item (title + optional description).
+	// Fixed-height list area: linesPerItem lines per item (1 = no desc, 2 = with desc).
 	// This keeps the dialog height constant regardless of search results.
-	fixedListHeight := maxVisible * 2
+	fixedListHeight := maxVisible * c.linesPerItem
 	listContent := baseStyle.Width(maxWidth).Height(fixedListHeight).Render(innerContent)
 
 	// Count display
@@ -276,6 +279,19 @@ func (c *commandDialogCmp) BindingKeys() []key.Binding {
 	return layout.KeyMapToSlice(commandKeys)
 }
 
+func (c *commandDialogCmp) SetMaxVisible(n int) {
+	if n > 0 {
+		c.maxVisible = n
+	}
+}
+
+func (c *commandDialogCmp) GetSelected() (Command, bool) {
+	if c.selectedIdx >= 0 && c.selectedIdx < len(c.filtered) {
+		return c.filtered[c.selectedIdx], true
+	}
+	return Command{}, false
+}
+
 func (c *commandDialogCmp) SetCommands(commands []Command) {
 	c.allCommands = commands
 	c.searchInput.SetValue("")
@@ -300,8 +316,9 @@ func (c *commandDialogCmp) SetCommands(commands []Command) {
 	c.applyFilter()
 }
 
-// NewCommandDialogCmp creates a new command selection dialog
-func NewCommandDialogCmp() CommandDialog {
+// NewCommandDialogCmp creates a new command selection dialog.
+// opts[0] = maxVisible (default 12), opts[1] = linesPerItem (default 2).
+func NewCommandDialogCmp(opts ...int) CommandDialog {
 	ti := textinput.New()
 	ti.Placeholder = "Type to search..."
 	ti.Focus()
@@ -312,8 +329,17 @@ func NewCommandDialogCmp() CommandDialog {
 	ti.TextStyle = lipgloss.NewStyle().Foreground(t.Text())
 	ti.Prompt = "> "
 
+	mv := 12
+	lpi := 2
+	if len(opts) > 0 {
+		mv = opts[0]
+	}
+	if len(opts) > 1 {
+		lpi = opts[1]
+	}
 	return &commandDialogCmp{
-		searchInput: ti,
-		maxVisible:  12,
+		searchInput:  ti,
+		maxVisible:   mv,
+		linesPerItem: lpi,
 	}
 }
