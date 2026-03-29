@@ -72,7 +72,8 @@ type LSPConfig struct {
 
 // TUIConfig defines the configuration for the Terminal User Interface.
 type TUIConfig struct {
-	Theme string `json:"theme,omitempty"`
+	Theme  string `json:"theme,omitempty"`
+	Editor string `json:"editor,omitempty"`
 }
 
 // ShellConfig defines the configuration for the shell used by the bash tool.
@@ -918,6 +919,18 @@ func WorkingDirectory() string {
 		panic("config not loaded")
 	}
 	return cfg.WorkingDir
+}
+
+// Editor returns the configured external editor command, falling back to $EDITOR
+// env var, then "vim" as a last resort.
+func Editor() string {
+	if cfg != nil && cfg.TUI.Editor != "" {
+		return cfg.TUI.Editor
+	}
+	if e := os.Getenv("EDITOR"); e != "" {
+		return e
+	}
+	return "vim"
 }
 
 func UpdateAgentModel(agentName AgentName, modelID models.ModelID) error {

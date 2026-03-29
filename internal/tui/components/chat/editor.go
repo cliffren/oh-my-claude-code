@@ -3,13 +3,13 @@ package chat
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"slices"
 	"strings"
 	"unicode"
 
 	"github.com/cliffren/toc/internal/app"
+	"github.com/cliffren/toc/internal/config"
 	"github.com/cliffren/toc/internal/logging"
 	"github.com/cliffren/toc/internal/message"
 	"github.com/cliffren/toc/internal/session"
@@ -84,39 +84,18 @@ const (
 )
 
 func (m *editorCmp) openEditor() tea.Cmd {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "nvim"
-	}
+	editorCmd := config.Editor()
+	wd := config.WorkingDirectory()
 
-	tmpfile, err := os.CreateTemp("", "msg_*.md")
-	if err != nil {
+	parts := strings.Fields(editorCmd)
+	args := append(parts[1:], wd)
+	c := exec.Command(parts[0], args...) //nolint:gosec
+	if err := c.Start(); err != nil {
 		return util.ReportError(err)
 	}
-	tmpfile.Close()
-	c := exec.Command(editor, tmpfile.Name()) //nolint:gosec
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	return tea.ExecProcess(c, func(err error) tea.Msg {
-		if err != nil {
-			return util.ReportError(err)
-		}
-		content, err := os.ReadFile(tmpfile.Name())
-		if err != nil {
-			return util.ReportError(err)
-		}
-		if len(content) == 0 {
-			return util.ReportWarn("Message is empty")
-		}
-		os.Remove(tmpfile.Name())
-		attachments := m.attachments
-		m.attachments = nil
-		return SendMsg{
-			Text:        string(content),
-			Attachments: attachments,
-		}
-	})
+	// Detach: don't wait for the GUI editor to close
+	go c.Wait() //nolint:errcheck
+	return util.ReportInfo("Opened in " + parts[0])
 }
 
 func (m *editorCmp) Init() tea.Cmd {
