@@ -55,11 +55,21 @@ func (cw *imeCursorWriter) Write(p []byte) (n int, err error) {
 
 // rewriteTrailingCursorPos finds the trailing \x1b[N;H that bubbletea appends
 // after each frame and replaces it with \x1b[row;colH.
+// maxEscLen is the maximum byte length of \x1b[row;colH (e.g. \x1b[9999;999H = 12 bytes).
+const maxEscLen = 16
+
 func rewriteTrailingCursorPos(p []byte, row, col int) ([]byte, bool) {
-	idx := bytes.LastIndex(p, []byte("\x1b["))
-	if idx < 0 {
+	// The escape is always at the very end of the frame buffer; search only the
+	// final maxEscLen bytes to avoid scanning the entire frame every render.
+	start := len(p) - maxEscLen
+	if start < 0 {
+		start = 0
+	}
+	rel := bytes.LastIndex(p[start:], []byte("\x1b["))
+	if rel < 0 {
 		return nil, false
 	}
+	idx := start + rel
 
 	after := p[idx+2:]
 

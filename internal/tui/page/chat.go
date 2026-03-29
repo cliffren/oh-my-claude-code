@@ -41,10 +41,10 @@ func (p *chatPage) PhysicalCursorPos(screenHeight int) (row, col int) {
 	// (+1 to convert 0-indexed layout rows to 1-indexed terminal rows,
 	//  +1 for the top border row of the editor container)
 	firstContentRow := screenHeight - editorH + 2
-	row = firstContentRow + p.editorCmp.CursorRow()
+	cursorRow, cursorCol := p.editorCmp.CursorPos()
+	row = firstContentRow + cursorRow
 	// Column layout (1-indexed): style-left-pad(1) + ">"(1) + textarea-prompt(1) + CharOffset
-	// → col = 3 + CharOffset + 1 = CharOffset + 4
-	col = p.editorCmp.CursorCol() + 4
+	col = cursorCol + 4
 	return
 }
 

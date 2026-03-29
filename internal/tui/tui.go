@@ -1158,7 +1158,7 @@ func (a appModel) View() string {
 		)
 	}
 
-	// Update physical cursor row for IME candidate window positioning.
+	// Update physical cursor position (row+col) for IME candidate window positioning.
 	// View() and Write() run in the same renderer goroutine, so this value is
 	// always fresh when imeCursorWriter intercepts the frame's cursor escape.
 	if a.cursorPos != nil {
