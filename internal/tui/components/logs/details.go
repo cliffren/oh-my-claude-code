@@ -50,9 +50,12 @@ func (i *detailCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return i, cmd
 		}
 
-		_, _, _, err := i.selection.HandleMouse(msg, i.selectionRegion(), i.visiblePlainLines(), i.clipboard)
+		_, _, copied, err := i.selection.HandleMouse(msg, i.selectionRegion(), i.visiblePlainLines(), i.clipboard)
 		if err != nil {
 			return i, util.ReportError(err)
+		}
+		if copied {
+			return i, util.ReportInfo("Copied to clipboard")
 		}
 		if i.selection.CapturesMouse() || msg.Action == tea.MouseActionRelease {
 			return i, nil

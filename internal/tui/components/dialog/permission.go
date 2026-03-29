@@ -119,9 +119,12 @@ func (p *permissionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 
-		_, _, _, err := p.selection.HandleMouse(msg, p.contentSelectionRegion(), p.visiblePlainLines(), p.clipboard)
+		_, _, copied, err := p.selection.HandleMouse(msg, p.contentSelectionRegion(), p.visiblePlainLines(), p.clipboard)
 		if err != nil {
 			cmds = append(cmds, util.ReportError(err))
+		}
+		if copied {
+			cmds = append(cmds, util.ReportInfo("Copied to clipboard"))
 		}
 		if p.selection.CapturesMouse() || msg.Action == tea.MouseActionRelease {
 			break

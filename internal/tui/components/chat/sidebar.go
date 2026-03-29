@@ -83,9 +83,12 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			return m, tea.Batch(cmds...)
 		}
-		_, _, _, err := m.selection.handleMouse(msg, m.selectionRegion(), m.visiblePlainLines(), m.clipboard)
+		_, _, copied, err := m.selection.handleMouse(msg, m.selectionRegion(), m.visiblePlainLines(), m.clipboard)
 		if err != nil {
 			cmds = append(cmds, util.ReportError(err))
+		}
+		if copied {
+			cmds = append(cmds, util.ReportInfo("Copied to clipboard"))
 		}
 		if m.selection.capturesMouse() || msg.Action == tea.MouseActionRelease {
 			return m, tea.Batch(cmds...)

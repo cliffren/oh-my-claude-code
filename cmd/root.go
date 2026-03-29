@@ -36,7 +36,7 @@ MCP servers, custom agents, plan mode — rendered in a polished terminal interf
   toc -d
 
   # Run with debug logging in a specific directory
-  toc -d -c /path/to/project
+  toc -d -w /path/to/project
 
   # Print version
   toc -v
@@ -304,7 +304,7 @@ func init() {
 	rootCmd.Flags().BoolP("help", "h", false, "Help")
 	rootCmd.Flags().BoolP("version", "v", false, "Version")
 	rootCmd.Flags().BoolP("debug", "d", false, "Debug")
-	rootCmd.Flags().StringP("cwd", "c", "", "Current working directory")
+	rootCmd.Flags().StringP("cwd", "w", "", "Current working directory")
 	rootCmd.Flags().StringP("prompt", "p", "", "Prompt to run in non-interactive mode")
 
 	// Add format flag with validation logic
@@ -315,7 +315,7 @@ func init() {
 	rootCmd.Flags().BoolP("quiet", "q", false, "Hide spinner in non-interactive mode")
 
 	// Continue most recent session
-	rootCmd.Flags().Bool("continue", false, "Continue the most recent session")
+	rootCmd.Flags().BoolP("continue", "c", false, "Continue the most recent session")
 
 	// Register custom validation for the format flag
 	rootCmd.RegisterFlagCompletionFunc("output-format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

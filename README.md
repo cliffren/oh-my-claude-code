@@ -13,7 +13,8 @@
 - Inline `/` command menu and `ctrl+p` command palette
 - Text selection and clipboard support
 - Multiple theme support
-- Vertical split layout with sidebar showing modified files
+- Vertical split layout with sidebar showing task progress and modified files
+- Side-by-side diff view with syntax highlighting and intra-line change detection
 
 ## Prerequisites
 
@@ -36,11 +37,17 @@ go build -ldflags "-X github.com/cliffren/toc/internal/version.Version=v1.0.0" -
 # Interactive mode
 toc
 
+# Continue the most recent session
+toc -c
+
 # Non-interactive prompt
 toc -p "Explain the use of context in Go"
 
 # With debug logging
 toc -d
+
+# Specify working directory
+toc -w /path/to/project
 ```
 
 ## Configuration
@@ -74,6 +81,8 @@ This fork adds a number of fixes and features on top of [oh-my-claude-code](http
 - **CJK table rendering** — markdown tables use runewidth-aware column alignment for CJK characters
 - **Command palette stability** — fixed height, no resize on search or scroll
 - **Vertical divider** — clear visual separator between the chat and sidebar panels
+- **Task progress tracking** — TodoWrite tool with real-time sidebar display (✓ completed, ◉ in progress, ○ pending)
+- **Git branch display** — sidebar shows current git branch next to working directory
 - **Performance fixes** — avoid state mutation in `View()`, reuse pubsub subscription channels, O(1) tool response lookup
 - **1M context window models** — added Sonnet/Opus 1M variants for long-context sessions
 

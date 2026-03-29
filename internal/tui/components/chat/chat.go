@@ -2,7 +2,9 @@ package chat
 
 import (
 	"fmt"
+	"os/exec"
 	// "sort" // LSP disabled
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	// "github.com/charmbracelet/x/ansi" // LSP disabled
@@ -108,12 +110,21 @@ func repo(width int) string {
 }
 
 func cwd(width int) string {
-	cwd := fmt.Sprintf("cwd: %s", config.WorkingDirectory())
-	t := theme.CurrentTheme()
+	wd := config.WorkingDirectory()
+	label := fmt.Sprintf("cwd: %s", wd)
 
+	cmd := exec.Command("git", "-C", wd, "rev-parse", "--abbrev-ref", "HEAD")
+	if out, err := cmd.Output(); err == nil {
+		branch := strings.TrimSpace(string(out))
+		if branch != "" {
+			label += fmt.Sprintf(" (%s)", branch)
+		}
+	}
+
+	t := theme.CurrentTheme()
 	return styles.BaseStyle().
 		Foreground(t.TextMuted()).
 		Width(width).
-		Render(cwd)
+		Render(label)
 }
 
