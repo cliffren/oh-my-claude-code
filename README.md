@@ -2,7 +2,7 @@
 
 **A polished TUI for Claude Code.**
 
-`toc` (TUI of Claude Code) wraps [Claude Code](https://docs.anthropic.com/en/docs/claude-code)'s full agent engine in a beautiful [Bubble Tea](https://github.com/charmbracelet/bubbletea) terminal interface. You get Claude Code's complete capabilities — tools, hooks, MCP servers, custom agents, plan mode — rendered in a clean terminal UI with full keyboard and mouse support.
+`toc` (TUI of Claude Code) wraps [Claude Code](https://docs.anthropic.com/en/docs/claude-code)'s full agent engine in a beautiful [Bubble Tea](https://github.com/charmbracelet/bubbletea) terminal interface. You get Claude Code's complete capabilities — tools, hooks, MCP servers, custom agents, plan mode — rendered in a clean terminal UI.
 
 ## Features
 
