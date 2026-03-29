@@ -1,6 +1,8 @@
 package layout
 
 import (
+	"strings"
+
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -158,18 +160,21 @@ func (s *splitPaneLayout) View() string {
 	hasBottom := s.bottomPanel != nil
 
 	if hasLeft && hasRight && hasBottom {
-		// Layout: left column (messages + editor) | right column (sidebar full height)
+		// Layout: left column (messages + editor) | divider | right column (sidebar full height)
 		leftView := s.leftPanel.View()
 		rightView := s.rightPanel.View()
 		bottomView := s.bottomPanel.View()
 
+		divider := s.verticalDivider(s.height)
 		leftCol := lipgloss.JoinVertical(lipgloss.Left, leftView, bottomView)
-		finalView = lipgloss.JoinHorizontal(lipgloss.Top, leftCol, rightView)
+		finalView = lipgloss.JoinHorizontal(lipgloss.Top, leftCol, divider, rightView)
 	} else {
-		// Standard layout: top section (left | right) over bottom
+		// Standard layout: top section (left | divider | right) over bottom
 		var topSection string
 		if hasLeft && hasRight {
-			topSection = lipgloss.JoinHorizontal(lipgloss.Top, s.leftPanel.View(), s.rightPanel.View())
+			topHeight, _ := s.sectionHeights()
+			divider := s.verticalDivider(topHeight)
+			topSection = lipgloss.JoinHorizontal(lipgloss.Top, s.leftPanel.View(), divider, s.rightPanel.View())
 		} else if hasLeft {
 			topSection = s.leftPanel.View()
 		} else if hasRight {
@@ -197,6 +202,19 @@ func (s *splitPaneLayout) View() string {
 	}
 
 	return finalView
+}
+
+func (s *splitPaneLayout) verticalDivider(height int) string {
+	t := theme.CurrentTheme()
+	line := lipgloss.NewStyle().
+		Foreground(t.BorderNormal()).
+		Background(t.Background()).
+		Render("│")
+	lines := make([]string, height)
+	for i := range lines {
+		lines[i] = line
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (s *splitPaneLayout) SetSize(width, height int) tea.Cmd {
@@ -243,8 +261,9 @@ func (s *splitPaneLayout) sectionHeights() (int, int) {
 
 func (s *splitPaneLayout) sectionWidths() (int, int) {
 	if s.leftPanel != nil && s.rightPanel != nil {
+		// Reserve 1 column for the vertical divider between panels.
 		leftWidth := int(float64(s.width) * s.ratio)
-		return leftWidth, s.width - leftWidth
+		return leftWidth, s.width - leftWidth - 1
 	}
 	if s.leftPanel != nil {
 		return s.width, 0

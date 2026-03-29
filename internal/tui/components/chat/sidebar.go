@@ -13,8 +13,10 @@ import (
 	"github.com/Krontx/oh-my-claude-code/internal/config"
 	"github.com/Krontx/oh-my-claude-code/internal/diff"
 	"github.com/Krontx/oh-my-claude-code/internal/history"
+	"github.com/Krontx/oh-my-claude-code/internal/logging"
 	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
 	"github.com/Krontx/oh-my-claude-code/internal/session"
+	"github.com/Krontx/oh-my-claude-code/internal/tui/components/dialog"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
 	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
@@ -31,29 +33,28 @@ type sidebarCmp struct {
 		additions int
 		removals  int
 	}
+	filesCh <-chan pubsub.Event[history.File]
 }
 
 func (m *sidebarCmp) Init() tea.Cmd {
 	if m.history != nil {
 		ctx := context.Background()
-		// Subscribe to file events
-		filesCh := m.history.Subscribe(ctx)
-
-		// Initialize the modified files map
+		m.filesCh = m.history.Subscribe(ctx)
 		m.modFiles = make(map[string]struct {
 			additions int
 			removals  int
 		})
-
-		// Load initial files and calculate diffs
 		m.loadModifiedFiles(ctx)
-
-		// Return a command that will send file events to the Update method
-		return func() tea.Msg {
-			return <-filesCh
-		}
+		return m.waitForFileEvent()
 	}
 	return nil
+}
+
+func (m *sidebarCmp) waitForFileEvent() tea.Cmd {
+	ch := m.filesCh
+	return func() tea.Msg {
+		return <-ch
+	}
 }
 
 func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -74,37 +75,36 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 		return m, tea.Batch(cmds...)
+	case dialog.ThemeChangedMsg:
+		m.rebuildViewport()
+		return m, nil
 	case SessionSelectedMsg:
 		if msg.ID != m.session.ID {
 			m.session = msg
 			ctx := context.Background()
 			m.loadModifiedFiles(ctx)
+			m.rebuildViewport()
 		}
 	case pubsub.Event[session.Session]:
 		if msg.Type == pubsub.UpdatedEvent {
 			if m.session.ID == msg.Payload.ID {
 				m.session = msg.Payload
+				m.rebuildViewport()
 			}
 		}
 	case pubsub.Event[history.File]:
 		if msg.Payload.SessionID == m.session.ID {
-			// Process the individual file change instead of reloading all files
 			ctx := context.Background()
 			m.processFileChanges(ctx, msg.Payload)
-
-			// Return a command to continue receiving events
-			return m, func() tea.Msg {
-				ctx := context.Background()
-				filesCh := m.history.Subscribe(ctx)
-				return <-filesCh
-			}
+			m.rebuildViewport()
 		}
+		// Always re-register on the same channel (no new Subscribe call)
+		return m, m.waitForFileEvent()
 	}
 	return m, nil
 }
 
-func (m *sidebarCmp) View() string {
-	// Build the sidebar content and set it in the viewport
+func (m *sidebarCmp) rebuildViewport() {
 	content := lipgloss.JoinVertical(
 		lipgloss.Top,
 		header(m.width),
@@ -116,7 +116,9 @@ func (m *sidebarCmp) View() string {
 		m.modifiedFiles(),
 	)
 	m.viewport.SetContent(content)
+}
 
+func (m *sidebarCmp) View() string {
 	t := theme.CurrentTheme()
 	visible := strings.Split(m.viewport.View(), "\n")
 	for len(visible) < m.viewport.Height {
@@ -256,6 +258,7 @@ func (m *sidebarCmp) SetSize(width, height int) tea.Cmd {
 	m.height = height
 	m.viewport.Width = width
 	m.viewport.Height = height
+	m.rebuildViewport()
 	return nil
 }
 
@@ -303,12 +306,14 @@ func (m *sidebarCmp) loadModifiedFiles(ctx context.Context) {
 	// Get all latest files for this session
 	latestFiles, err := m.history.ListLatestSessionFiles(ctx, m.session.ID)
 	if err != nil {
+		logging.Error(fmt.Sprintf("sidebar: failed to list latest session files: %v", err))
 		return
 	}
 
 	// Get all files for this session (to find initial versions)
 	allFiles, err := m.history.ListBySession(ctx, m.session.ID)
 	if err != nil {
+		logging.Error(fmt.Sprintf("sidebar: failed to list session files: %v", err))
 		return
 	}
 

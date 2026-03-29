@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/Krontx/oh-my-claude-code/internal/config"
 )
 
 func TestLsTool_Info(t *testing.T) {
@@ -28,6 +29,9 @@ func TestLsTool_Run(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "ls_tool_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
+
+	_, err = config.Load(tempDir, false)
+	require.NoError(t, err)
 
 	// Create a test directory structure
 	testDirs := []string{
@@ -183,21 +187,11 @@ func TestLsTool_Run(t *testing.T) {
 	})
 
 	t.Run("handles relative path", func(t *testing.T) {
-		// Save original working directory
-		origWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer func() {
-			os.Chdir(origWd)
-		}()
-		
-		// Change to a directory above the temp directory
-		parentDir := filepath.Dir(tempDir)
-		err = os.Chdir(parentDir)
-		require.NoError(t, err)
-		
+		// config.WorkingDirectory() is tempDir (loaded at the top of this test).
+		// Pass a relative subpath so it resolves to tempDir/dir2.
 		tool := NewLsTool()
 		params := LSParams{
-			Path: filepath.Base(tempDir),
+			Path: "dir2",
 		}
 
 		paramsJSON, err := json.Marshal(params)
@@ -210,10 +204,10 @@ func TestLsTool_Run(t *testing.T) {
 
 		response, err := tool.Run(context.Background(), call)
 		require.NoError(t, err)
-		
-		// Should list the temp directory contents
-		assert.Contains(t, response.Content, "dir1")
-		assert.Contains(t, response.Content, "file1.txt")
+
+		// Should list dir2 contents relative to WorkingDirectory (tempDir)
+		assert.Contains(t, response.Content, "subdir1")
+		assert.Contains(t, response.Content, "file4.txt")
 	})
 }
 

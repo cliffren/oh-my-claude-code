@@ -174,6 +174,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		m.attachments = append(m.attachments, msg.Attachment)
+		m.updateTextareaHeight()
 	case tea.KeyMsg:
 		if isMouseProtocolArtifact(msg) {
 			return m, nil
@@ -185,6 +186,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, DeleteKeyMaps.DeleteAllAttachments) && m.deleteMode {
 			m.deleteMode = false
 			m.attachments = nil
+			m.updateTextareaHeight()
 			return m, nil
 		}
 		if m.deleteMode && len(msg.Runes) > 0 && unicode.IsDigit(msg.Runes[0]) {
@@ -196,6 +198,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.attachments = slices.Delete(m.attachments, num, num+1)
 				}
+				m.updateTextareaHeight()
 				return m, nil
 			}
 		}
@@ -248,7 +251,6 @@ func (m *editorCmp) View() string {
 	if len(m.attachments) == 0 {
 		return lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"), m.textarea.View())
 	}
-	m.textarea.SetHeight(m.height - 1)
 	return lipgloss.JoinVertical(lipgloss.Top,
 		m.attachmentsContent(),
 		lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"),
@@ -256,11 +258,19 @@ func (m *editorCmp) View() string {
 	)
 }
 
+func (m *editorCmp) updateTextareaHeight() {
+	if len(m.attachments) > 0 {
+		m.textarea.SetHeight(m.height - 1)
+	} else {
+		m.textarea.SetHeight(m.height)
+	}
+}
+
 func (m *editorCmp) SetSize(width, height int) tea.Cmd {
 	m.width = width
 	m.height = height
 	m.textarea.SetWidth(width - 3) // account for prompt ">" and left padding
-	m.textarea.SetHeight(height)
+	m.updateTextareaHeight()
 	return nil
 }
 

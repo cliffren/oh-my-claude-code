@@ -402,6 +402,18 @@ func findToolResponse(toolCallID string, futureMessages []message.Message) *mess
 	return nil
 }
 
+// buildToolResponseMap builds an O(1) lookup from toolCallID → ToolResult.
+// Use this when findToolResponse would be called in a loop over allMessages.
+func buildToolResponseMap(msgs []message.Message) map[string]message.ToolResult {
+	m := make(map[string]message.ToolResult)
+	for _, msg := range msgs {
+		for _, r := range msg.ToolResults() {
+			m[r.ToolCallID] = r
+		}
+	}
+	return m
+}
+
 func toolName(name string) string {
 	switch name {
 	case agent.AgentToolName:
@@ -763,6 +775,9 @@ func renderToolCallsGroup(
 		names[i] = toolName(tc.Name)
 	}
 
+	// Precompute O(1) lookup for tool responses — avoids O(calls × messages) scan.
+	toolRespMap := buildToolResponseMap(allMessages)
+
 	expandIndicator := "▶ "
 	if isExpanded {
 		expandIndicator = "▼ "
@@ -816,7 +831,10 @@ func renderToolCallsGroup(
 			lineCount += lipgloss.Height(tcHeader)
 			// Response (only when this tool call is expanded)
 			if tcExpanded {
-				response := findToolResponse(tc.ID, allMessages)
+				var response *message.ToolResult
+				if r, ok := toolRespMap[tc.ID]; ok {
+					response = &r
+				}
 				if response != nil {
 					respContent := renderToolResponse(tc, *response, width-4)
 					respContent = strings.TrimSuffix(respContent, "\n")
