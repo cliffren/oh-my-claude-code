@@ -1,12 +1,19 @@
-# oh-my-claude-code (omcc)
+# toc
 
-**Claude Code's brain, OpenCode's beauty.**
+**A polished TUI for Claude Code.**
 
-A polished [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI that wraps [Claude Code](https://docs.anthropic.com/en/docs/claude-code)'s full agent engine. You get Claude Code's complete capabilities — tools, hooks, MCP servers, custom agents, plan mode — rendered in OpenCode's beautiful terminal interface.
+`toc` (TUI of Claude Code) wraps [Claude Code](https://docs.anthropic.com/en/docs/claude-code)'s full agent engine in a beautiful [Bubble Tea](https://github.com/charmbracelet/bubbletea) terminal interface. You get Claude Code's complete capabilities — tools, hooks, MCP servers, custom agents, plan mode — rendered in a clean, keyboard-driven UI.
 
-## Why?
+## Features
 
-Claude Code has the best AI coding agent capabilities but basic terminal output. OpenCode has a gorgeous TUI but its own AI backend. **omcc** combines them: Claude Code does the thinking, OpenCode does the rendering.
+- Real-time streaming chat with Claude Code
+- Collapsible tool call panels (Bash, Read, Edit, Write, Glob, Grep, ...)
+- Thinking/reasoning display
+- Session management — search, rename, delete
+- Inline `/` command menu and `ctrl+p` command palette
+- Text selection and clipboard support
+- Multiple theme support
+- Vertical split layout with sidebar showing modified files
 
 ## Prerequisites
 
@@ -15,45 +22,30 @@ Claude Code has the best AI coding agent capabilities but basic terminal output.
 
 ## Install
 
-```bash
-go install github.com/Krontx/oh-my-claude-code@latest
-```
-
-Or build from source:
+Build from source:
 
 ```bash
-git clone https://github.com/Krontx/oh-my-claude-code.git
-cd oh-my-claude-code
-go build -o omcc .
+git clone https://github.com/cliffren/toc.git
+cd toc
+go build -ldflags "-X github.com/cliffren/toc/internal/version.Version=v1.0.0" -o toc .
 ```
 
 ## Usage
 
 ```bash
 # Interactive mode
-omcc
+toc
 
 # Non-interactive prompt
-omcc -p "Explain the use of context in Go"
+toc -p "Explain the use of context in Go"
 
 # With debug logging
-omcc -d
+toc -d
 ```
-
-## How It Works
-
-omcc spawns `claude` as a subprocess with `--output-format stream-json`, mapping Claude Code's streaming events to OpenCode's TUI components:
-
-- **Text streaming** renders incrementally in the chat view
-- **Tool uses** (Bash, Read, Edit, Write, etc.) display as collapsible panels
-- **Thinking/reasoning** shows in a dedicated section
-- **Session resume** works across restarts via `--resume`
-
-Claude Code manages its own agentic loop — tool execution, permission handling, MCP servers, hooks, and `.claude/` configuration all work exactly as they do in the native CLI.
 
 ## Configuration
 
-Config file: `~/.omcc.json` or `.omcc.json` in your project directory.
+Config file: `~/.toc.json` or `.toc.json` in your project directory.
 
 ```json
 {
@@ -68,11 +60,13 @@ Config file: `~/.omcc.json` or `.omcc.json` in your project directory.
 
 Available models: `claude-code-sonnet`, `claude-code-opus`, `claude-code-haiku`
 
-Set `CLAUDE_CODE_PATH` environment variable to use a custom Claude Code binary location.
+Set `CLAUDE_CODE_PATH` to use a custom Claude Code binary location.
 
-## Attribution
+## Acknowledgements
 
-Based on [OpenCode](https://github.com/opencode-ai/opencode) (MIT License). See [NOTICE.md](NOTICE.md) for details.
+This project is a fork of [oh-my-claude-code](https://github.com/Krontx/oh-my-claude-code) by [@Krontx](https://github.com/Krontx), which itself is based on [OpenCode](https://github.com/opencode-ai/opencode) by [@opencode-ai](https://github.com/opencode-ai).
+
+A huge thanks to both teams for their excellent work — the core agent engine and TUI architecture this project builds upon wouldn't exist without them.
 
 ## License
 
