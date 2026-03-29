@@ -14,6 +14,7 @@ import (
 	"github.com/cliffren/toc/internal/format"
 	"github.com/cliffren/toc/internal/history"
 	"github.com/cliffren/toc/internal/llm/agent"
+	"github.com/cliffren/toc/internal/llm/tools"
 	"github.com/cliffren/toc/internal/logging"
 	"github.com/cliffren/toc/internal/lsp"
 	"github.com/cliffren/toc/internal/message"
@@ -29,6 +30,7 @@ type App struct {
 	Permissions permission.Service
 
 	CoderAgent agent.Service
+	TodoStore  *tools.TodoStore
 
 	LSPClients map[string]*lsp.Client
 
@@ -45,11 +47,14 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 	messages := message.NewService(q)
 	files := history.NewService(q, conn)
 
+	todoStore := tools.NewTodoStore()
+
 	app := &App{
 		Sessions:    sessions,
 		Messages:    messages,
 		History:     files,
 		Permissions: permission.NewPermissionService(),
+		TodoStore:   todoStore,
 		LSPClients:  make(map[string]*lsp.Client),
 	}
 
@@ -70,6 +75,7 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 			app.Messages,
 			app.History,
 			app.LSPClients,
+			app.TodoStore,
 		),
 	)
 	if err != nil {

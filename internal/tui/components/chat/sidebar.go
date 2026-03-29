@@ -13,6 +13,7 @@ import (
 	"github.com/cliffren/toc/internal/config"
 	"github.com/cliffren/toc/internal/diff"
 	"github.com/cliffren/toc/internal/history"
+	"github.com/cliffren/toc/internal/llm/tools"
 	"github.com/cliffren/toc/internal/logging"
 	"github.com/cliffren/toc/internal/pubsub"
 	"github.com/cliffren/toc/internal/session"
@@ -27,6 +28,7 @@ type sidebarCmp struct {
 	viewport      viewport.Model
 	session       session.Session
 	history       history.Service
+	todoStore     *tools.TodoStore
 	selection     selectionController
 	clipboard     clipboardWriter
 	modFiles      map[string]struct {
@@ -34,9 +36,11 @@ type sidebarCmp struct {
 		removals  int
 	}
 	filesCh <-chan pubsub.Event[history.File]
+	todoCh  <-chan pubsub.Event[tools.TodoEvent]
 }
 
 func (m *sidebarCmp) Init() tea.Cmd {
+	var cmds []tea.Cmd
 	if m.history != nil {
 		ctx := context.Background()
 		m.filesCh = m.history.Subscribe(ctx)
@@ -45,13 +49,25 @@ func (m *sidebarCmp) Init() tea.Cmd {
 			removals  int
 		})
 		m.loadModifiedFiles(ctx)
-		return m.waitForFileEvent()
+		cmds = append(cmds, m.waitForFileEvent())
 	}
-	return nil
+	if m.todoStore != nil {
+		ctx := context.Background()
+		m.todoCh = m.todoStore.Subscribe(ctx)
+		cmds = append(cmds, m.waitForTodoEvent())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *sidebarCmp) waitForFileEvent() tea.Cmd {
 	ch := m.filesCh
+	return func() tea.Msg {
+		return <-ch
+	}
+}
+
+func (m *sidebarCmp) waitForTodoEvent() tea.Cmd {
+	ch := m.todoCh
 	return func() tea.Msg {
 		return <-ch
 	}
@@ -100,21 +116,31 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Always re-register on the same channel (no new Subscribe call)
 		return m, m.waitForFileEvent()
+	case pubsub.Event[tools.TodoEvent]:
+		if msg.Payload.SessionID == m.session.ID {
+			m.rebuildViewport()
+		}
+		return m, m.waitForTodoEvent()
 	}
 	return m, nil
 }
 
 func (m *sidebarCmp) rebuildViewport() {
-	content := lipgloss.JoinVertical(
-		lipgloss.Top,
+	parts := []string{
 		header(m.width),
 		" ",
 		m.sessionSection(),
 		" ",
-		// lspsConfigured(m.width), // LSP disabled
-		// " ",
-		m.modifiedFiles(),
-	)
+	}
+
+	// Show tasks section only when there are todos
+	if todoSection := m.todoSection(); todoSection != "" {
+		parts = append(parts, todoSection, " ")
+	}
+
+	parts = append(parts, m.modifiedFiles())
+
+	content := lipgloss.JoinVertical(lipgloss.Top, parts...)
 	m.viewport.SetContent(content)
 }
 
@@ -150,6 +176,68 @@ func (m *sidebarCmp) sessionSection() string {
 		sessionKey,
 		sessionValue,
 	)
+}
+
+func (m *sidebarCmp) todoSection() string {
+	if m.todoStore == nil || m.session.ID == "" {
+		return ""
+	}
+	todos := m.todoStore.Get(m.session.ID)
+	if len(todos) == 0 {
+		return ""
+	}
+
+	t := theme.CurrentTheme()
+	baseStyle := styles.BaseStyle()
+
+	title := baseStyle.
+		Width(m.width).
+		Foreground(t.Primary()).
+		Bold(true).
+		Render("Tasks:")
+
+	var items []string
+	for _, todo := range todos {
+		var icon string
+		var fg lipgloss.AdaptiveColor
+		switch todo.Status {
+		case "completed":
+			icon = "✓"
+			fg = t.Success()
+		case "in_progress":
+			icon = "◉"
+			fg = t.Warning()
+		default:
+			icon = "○"
+			fg = t.TextMuted()
+		}
+
+		prefix := baseStyle.Foreground(fg).Render(icon + " ")
+		prefixW := lipgloss.Width(prefix)
+		content := todo.Content
+		maxContentW := m.width - prefixW
+		if maxContentW > 0 {
+			content = ansi.Truncate(content, maxContentW, "...")
+		}
+		line := baseStyle.
+			Width(m.width).
+			Render(
+				lipgloss.JoinHorizontal(lipgloss.Left,
+					prefix,
+					baseStyle.Foreground(fg).Render(content),
+				),
+			)
+		items = append(items, line)
+	}
+
+	return baseStyle.
+		Width(m.width).
+		Render(
+			lipgloss.JoinVertical(lipgloss.Top,
+				title,
+				lipgloss.JoinVertical(lipgloss.Left, items...),
+			),
+		)
 }
 
 func (m *sidebarCmp) modifiedFile(filePath string, additions, removals int) string {
@@ -288,12 +376,13 @@ func (m *sidebarCmp) GetSize() (int, int) {
 	return m.width, m.height
 }
 
-func NewSidebarCmp(session session.Session, history history.Service) tea.Model {
+func NewSidebarCmp(session session.Session, history history.Service, todoStore *tools.TodoStore) tea.Model {
 	vp := viewport.New(0, 0)
 	return &sidebarCmp{
 		viewport:  vp,
 		session:   session,
 		history:   history,
+		todoStore: todoStore,
 		clipboard: newClipboardWriter(),
 	}
 }

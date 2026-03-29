@@ -17,6 +17,7 @@ func CoderAgentTools(
 	messages message.Service,
 	history history.Service,
 	lspClients map[string]*lsp.Client,
+	todoStore *tools.TodoStore,
 ) []tools.BaseTool {
 	ctx := context.Background()
 	otherTools := GetMcpTools(ctx, permissions)
@@ -35,6 +36,7 @@ func CoderAgentTools(
 			tools.NewViewTool(lspClients),
 			tools.NewPatchTool(lspClients, permissions, history),
 			tools.NewWriteTool(lspClients, permissions, history),
+			tools.NewTodoTool(todoStore),
 			NewAgentTool(sessions, messages, lspClients),
 		}, otherTools...,
 	)

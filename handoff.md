@@ -15,26 +15,22 @@
 - **Active branch**: `feature/chat-selection-scroll`
 - **main**: in sync with feature branch, pushed to `https://github.com/cliffren/toc`
 - **Installed binary**: `~/.local/bin/toc` at v1.0.0
-- **Working tree**: clean
+- **Working tree**: clean (CLAUDE.md added, not yet committed)
 - **Tests**: all pass
 - **Build**: clean
 
+## Completed Tasks
+
+- **Rename project directory** — done: now at `/Users/rentao/Projects/toc`
+- **Clean up old `.omcc` dirs** — deleted `~/.omcc`, `~/Projects/ai-auto/test/.omcc`
+- **Delete old `omcc` binary** — deleted `~/.local/bin/omcc`
+- **Created CLAUDE.md** — project conventions, build commands, structure documented
+
 ## Unfinished Tasks
 
-- **Rename project directory** — user wants to rename `/Users/rentao/Projects/oh-my-claude-code` → `/Users/rentao/Projects/toc`; deferred to avoid breaking current session context. Do at the start of next session.
 - **Ghostty evaluation** — installed v1.3.1, config at `~/.config/ghostty/config` (font-size=16, theme=Atom One Dark); user hasn't fully switched from iTerm2 yet
-
-## Known Issues
-
-- **Old `.omcc` dirs not cleaned up** — data was migrated to `.toc` but originals still exist at:
-  - `/Users/rentao/Projects/oh-my-claude-code/.omcc`
-  - `/Users/rentao/Projects/ai-auto/test/.omcc`
-  - `/Users/rentao/.omcc`
-- **`omcc` binary** still at `~/.local/bin/omcc` — can be deleted
 
 ## Next Steps
 
-1. **Rename project directory**: `mv /Users/rentao/Projects/oh-my-claude-code /Users/rentao/Projects/toc`, open new session from that path
-2. **Clean up** old `.omcc` dirs and `~/.local/bin/omcc`
-3. **Continue feature development** on `feature/chat-selection-scroll`
-4. **Tag future releases**: `git tag v1.0.x && git push origin v1.0.x && go build -ldflags "..." -o ~/.local/bin/toc .`
+1. **Continue feature development** on `feature/chat-selection-scroll`
+2. **Tag future releases**: `git tag v1.0.x && git push origin v1.0.x && go build -ldflags "..." -o ~/.local/bin/toc .`

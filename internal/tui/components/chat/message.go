@@ -438,6 +438,8 @@ func toolName(name string) string {
 		return "Write"
 	case tools.PatchToolName:
 		return "Patch"
+	case tools.TodoToolName:
+		return "Todo"
 	}
 	return name
 }
@@ -466,6 +468,8 @@ func getToolAction(name string) string {
 		return "Preparing write..."
 	case tools.PatchToolName:
 		return "Preparing patch..."
+	case tools.TodoToolName:
+		return "Updating tasks..."
 	}
 	return "Working..."
 }
