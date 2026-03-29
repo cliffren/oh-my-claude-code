@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,13 +25,16 @@ import (
 )
 
 type editorCmp struct {
-	width       int
-	height      int
-	app         *app.App
-	session     session.Session
-	textarea    textarea.Model
-	attachments []message.Attachment
-	deleteMode  bool
+	width        int
+	height       int
+	app          *app.App
+	session      session.Session
+	textarea     textarea.Model
+	attachments  []message.Attachment
+	deleteMode   bool
+	inputHistory []string
+	historyIdx   int    // -1 = not browsing history
+	historyDraft string // stash current input when entering history mode
 }
 
 type EditorKeyMaps struct {
@@ -132,12 +136,40 @@ func (m *editorCmp) send() tea.Cmd {
 	if value == "" {
 		return nil
 	}
+
+	// Record in input history
+	m.inputHistory = append(m.inputHistory, value)
+	m.historyIdx = -1
+	m.historyDraft = ""
+
 	return tea.Batch(
 		util.CmdHandler(SendMsg{
 			Text:        value,
 			Attachments: attachments,
 		}),
 	)
+}
+
+func (m *editorCmp) loadSessionHistory() {
+	m.inputHistory = nil
+	m.historyIdx = -1
+	m.historyDraft = ""
+
+	if m.session.ID == "" {
+		return
+	}
+
+	msgs, err := m.app.Messages.List(context.Background(), m.session.ID)
+	if err != nil {
+		return
+	}
+	for _, msg := range msgs {
+		if msg.Role == message.User {
+			if text := msg.Content().String(); text != "" {
+				m.inputHistory = append(m.inputHistory, text)
+			}
+		}
+	}
 }
 
 func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -166,6 +198,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SessionSelectedMsg:
 		if msg.ID != m.session.ID {
 			m.session = msg
+			m.loadSessionHistory()
 		}
 		return m, nil
 	case dialog.AttachmentAddedMsg:
@@ -221,7 +254,33 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textarea.SetValue("")
 			return m, util.CmdHandler(ShowSlashCompletionMsg{})
 		}
-		// Hanlde Enter key
+		// Handle Up/Down for input history
+		if m.textarea.Focused() && msg.String() == "up" && len(m.inputHistory) > 0 {
+			if m.historyIdx == -1 {
+				// Entering history mode: stash current draft
+				m.historyDraft = m.textarea.Value()
+				m.historyIdx = len(m.inputHistory) - 1
+			} else if m.historyIdx > 0 {
+				m.historyIdx--
+			}
+			m.textarea.SetValue(m.inputHistory[m.historyIdx])
+			m.textarea.CursorEnd()
+			return m, nil
+		}
+		if m.textarea.Focused() && msg.String() == "down" && m.historyIdx >= 0 {
+			if m.historyIdx < len(m.inputHistory)-1 {
+				m.historyIdx++
+				m.textarea.SetValue(m.inputHistory[m.historyIdx])
+			} else {
+				// Back to draft
+				m.historyIdx = -1
+				m.textarea.SetValue(m.historyDraft)
+				m.historyDraft = ""
+			}
+			m.textarea.CursorEnd()
+			return m, nil
+		}
+		// Handle Enter key
 		if m.textarea.Focused() && key.Matches(msg, editorMaps.Send) {
 			value := m.textarea.Value()
 			if len(value) > 0 && value[len(value)-1] == '\\' {
@@ -356,8 +415,9 @@ func (m *editorCmp) CursorPos() (row, col int) {
 func NewEditorCmp(app *app.App) EditorCmp {
 	ta := CreateTextArea(nil)
 	return &editorCmp{
-		app:      app,
-		textarea: ta,
+		app:        app,
+		textarea:   ta,
+		historyIdx: -1,
 	}
 }
 
