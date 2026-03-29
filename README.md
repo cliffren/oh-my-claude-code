@@ -61,6 +61,10 @@ Config file: `~/.toc.json` or `.toc.json` in your project directory.
   },
   "agents": {
     "coder": { "model": "claude-code-sonnet" }
+  },
+  "tui": {
+    "theme": "flexoki",
+    "editor": "code"
   }
 }
 ```
@@ -68,6 +72,8 @@ Config file: `~/.toc.json` or `.toc.json` in your project directory.
 Available models: `claude-code-sonnet`, `claude-code-opus`, `claude-code-haiku`
 
 Set `CLAUDE_CODE_PATH` to use a custom Claude Code binary location.
+
+**`tui.editor`** — editor to open when pressing `ctrl+e` (opens the current project directory). Falls back to `$EDITOR` env var, then `vim`. Use `"code"` for VS Code, `"cursor"` for Cursor, `"zed"` for Zed, etc.
 
 ## Improvements over the original
 
