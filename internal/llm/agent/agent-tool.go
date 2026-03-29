@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
-	"github.com/cliffren/oh-my-claude-code/internal/lsp"
-	"github.com/cliffren/oh-my-claude-code/internal/message"
-	"github.com/cliffren/oh-my-claude-code/internal/session"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/llm/tools"
+	"github.com/cliffren/toc/internal/lsp"
+	"github.com/cliffren/toc/internal/message"
+	"github.com/cliffren/toc/internal/session"
 )
 
 type agentTool struct {

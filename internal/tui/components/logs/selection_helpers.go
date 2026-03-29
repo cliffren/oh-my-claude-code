@@ -1,6 +1,6 @@
 package logs
 
-import selectionpkg "github.com/cliffren/oh-my-claude-code/internal/tui/selection"
+import selectionpkg "github.com/cliffren/toc/internal/tui/selection"
 
 type clipboardFunc = selectionpkg.ClipboardFunc
 

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
+	"github.com/cliffren/toc/internal/llm/models"
 )
 
 type MessageRole string

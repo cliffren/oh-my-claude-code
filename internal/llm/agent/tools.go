@@ -3,12 +3,12 @@ package agent
 import (
 	"context"
 
-	"github.com/cliffren/oh-my-claude-code/internal/history"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
-	"github.com/cliffren/oh-my-claude-code/internal/lsp"
-	"github.com/cliffren/oh-my-claude-code/internal/message"
-	"github.com/cliffren/oh-my-claude-code/internal/permission"
-	"github.com/cliffren/oh-my-claude-code/internal/session"
+	"github.com/cliffren/toc/internal/history"
+	"github.com/cliffren/toc/internal/llm/tools"
+	"github.com/cliffren/toc/internal/lsp"
+	"github.com/cliffren/toc/internal/message"
+	"github.com/cliffren/toc/internal/permission"
+	"github.com/cliffren/toc/internal/session"
 )
 
 func CoderAgentTools(

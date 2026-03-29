@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/util"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/tui/util"
 )
 
 // Command prefix constants

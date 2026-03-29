@@ -1,9 +1,9 @@
 package page
 
 import (
-	"github.com/cliffren/oh-my-claude-code/internal/tui/components/logs"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/layout"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
+	"github.com/cliffren/toc/internal/tui/components/logs"
+	"github.com/cliffren/toc/internal/tui/layout"
+	"github.com/cliffren/toc/internal/tui/styles"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/llm/models"
+	"github.com/cliffren/toc/internal/llm/tools"
 )
 
 func CoderPrompt(provider models.ModelProvider) string {

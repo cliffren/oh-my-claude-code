@@ -1,4 +1,4 @@
-module github.com/cliffren/oh-my-claude-code
+module github.com/cliffren/toc
 
 go 1.24.0
 

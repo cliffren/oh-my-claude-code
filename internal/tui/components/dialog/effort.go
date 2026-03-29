@@ -7,12 +7,12 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/layout"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/util"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/llm/models"
+	"github.com/cliffren/toc/internal/tui/layout"
+	"github.com/cliffren/toc/internal/tui/styles"
+	"github.com/cliffren/toc/internal/tui/theme"
+	"github.com/cliffren/toc/internal/tui/util"
 )
 
 var effortLevels = []string{"low", "medium", "high", "max"}

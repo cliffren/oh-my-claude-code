@@ -3,7 +3,7 @@ package layout
 import (
 	"strings"
 
-	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/toc/internal/tui/theme"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

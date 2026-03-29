@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/toc/internal/logging"
 	"github.com/spf13/viper"
 )
 

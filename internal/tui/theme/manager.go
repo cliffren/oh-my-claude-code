@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/alecthomas/chroma/v2/styles"
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/logging"
 )
 
 // Manager handles theme registration, selection, and retrieval.

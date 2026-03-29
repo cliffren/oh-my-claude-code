@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/cliffren/oh-my-claude-code/internal/db"
-	"github.com/cliffren/oh-my-claude-code/internal/pubsub"
+	"github.com/cliffren/toc/internal/db"
+	"github.com/cliffren/toc/internal/pubsub"
 )
 
 const (

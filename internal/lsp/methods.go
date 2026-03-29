@@ -4,7 +4,7 @@ package lsp
 import (
 	"context"
 
-	"github.com/cliffren/oh-my-claude-code/internal/lsp/protocol"
+	"github.com/cliffren/toc/internal/lsp/protocol"
 )
 
 // Implementation sends a textDocument/implementation request to the LSP server.

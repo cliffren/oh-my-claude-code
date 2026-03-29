@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/toc/internal/logging"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

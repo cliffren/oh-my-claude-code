@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
-	"github.com/cliffren/oh-my-claude-code/internal/fileutil"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/components/dialog"
+	"github.com/cliffren/toc/internal/fileutil"
+	"github.com/cliffren/toc/internal/logging"
+	"github.com/cliffren/toc/internal/tui/components/dialog"
 )
 
 type filesAndFoldersContextGroup struct {

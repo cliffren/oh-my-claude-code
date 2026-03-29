@@ -3,7 +3,7 @@ package prompt
 import (
 	"fmt"
 
-	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
+	"github.com/cliffren/toc/internal/llm/models"
 )
 
 func TaskPrompt(provider models.ModelProvider) string {

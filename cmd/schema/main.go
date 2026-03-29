@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/llm/models"
 )
 
 // JSONSchemaType represents a JSON Schema type

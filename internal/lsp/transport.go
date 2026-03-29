@@ -8,8 +8,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/logging"
 )
 
 // Write writes an LSP message to the given writer

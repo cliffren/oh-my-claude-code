@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/fileutil"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/fileutil"
 )
 
 type GrepParams struct {

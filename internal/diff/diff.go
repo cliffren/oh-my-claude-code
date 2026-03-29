@@ -15,8 +15,8 @@ import (
 	"github.com/aymanbagabas/go-udiff"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/tui/theme"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 

@@ -14,14 +14,14 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/cliffren/oh-my-claude-code/internal/app"
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
-	"github.com/cliffren/oh-my-claude-code/internal/message"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/image"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/util"
+	"github.com/cliffren/toc/internal/app"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/logging"
+	"github.com/cliffren/toc/internal/message"
+	"github.com/cliffren/toc/internal/tui/image"
+	"github.com/cliffren/toc/internal/tui/styles"
+	"github.com/cliffren/toc/internal/tui/theme"
+	"github.com/cliffren/toc/internal/tui/util"
 )
 
 const (

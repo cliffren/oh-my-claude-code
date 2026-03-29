@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
-	"github.com/cliffren/oh-my-claude-code/internal/message"
+	"github.com/cliffren/toc/internal/llm/models"
+	"github.com/cliffren/toc/internal/llm/tools"
+	"github.com/cliffren/toc/internal/message"
 )
 
 type EventType string
@@ -149,7 +149,7 @@ func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption
 		clientOptions.openaiOptions = append(clientOptions.openaiOptions,
 			WithOpenAIBaseURL("https://openrouter.ai/api/v1"),
 			WithOpenAIExtraHeaders(map[string]string{
-				"HTTP-Referer": "https://github.com/cliffren/oh-my-claude-code",
+				"HTTP-Referer": "https://github.com/cliffren/toc",
 				"X-Title":      "toc",
 			}),
 		)

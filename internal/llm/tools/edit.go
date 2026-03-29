@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/diff"
-	"github.com/cliffren/oh-my-claude-code/internal/history"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
-	"github.com/cliffren/oh-my-claude-code/internal/lsp"
-	"github.com/cliffren/oh-my-claude-code/internal/permission"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/diff"
+	"github.com/cliffren/toc/internal/history"
+	"github.com/cliffren/toc/internal/logging"
+	"github.com/cliffren/toc/internal/lsp"
+	"github.com/cliffren/toc/internal/permission"
 )
 
 type EditParams struct {

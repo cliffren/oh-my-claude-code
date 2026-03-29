@@ -1,7 +1,7 @@
 package chat
 
 import (
-	selectionpkg "github.com/cliffren/oh-my-claude-code/internal/tui/selection"
+	selectionpkg "github.com/cliffren/toc/internal/tui/selection"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

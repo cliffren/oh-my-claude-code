@@ -7,10 +7,10 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/layout"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/util"
+	"github.com/cliffren/toc/internal/tui/layout"
+	"github.com/cliffren/toc/internal/tui/styles"
+	"github.com/cliffren/toc/internal/tui/theme"
+	"github.com/cliffren/toc/internal/tui/util"
 )
 
 // Command represents a command that can be executed

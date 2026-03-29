@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/toc/internal/config"
 )
 
 func TestLsTool_Info(t *testing.T) {

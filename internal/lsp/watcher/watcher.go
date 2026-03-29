@@ -11,10 +11,10 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/fsnotify/fsnotify"
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
-	"github.com/cliffren/oh-my-claude-code/internal/lsp"
-	"github.com/cliffren/oh-my-claude-code/internal/lsp/protocol"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/logging"
+	"github.com/cliffren/toc/internal/lsp"
+	"github.com/cliffren/toc/internal/lsp/protocol"
 )
 
 // WorkspaceWatcher manages LSP file watching

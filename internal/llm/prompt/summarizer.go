@@ -1,6 +1,6 @@
 package prompt
 
-import "github.com/cliffren/oh-my-claude-code/internal/llm/models"
+import "github.com/cliffren/toc/internal/llm/models"
 
 func SummarizerPrompt(_ models.ModelProvider) string {
 	return `You are a helpful AI assistant tasked with summarizing conversations.

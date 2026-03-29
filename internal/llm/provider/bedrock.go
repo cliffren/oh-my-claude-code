@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
-	"github.com/cliffren/oh-my-claude-code/internal/message"
+	"github.com/cliffren/toc/internal/llm/tools"
+	"github.com/cliffren/toc/internal/message"
 )
 
 type bedrockOptions struct {

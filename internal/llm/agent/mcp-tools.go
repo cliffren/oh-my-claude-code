@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
-	"github.com/cliffren/oh-my-claude-code/internal/permission"
-	"github.com/cliffren/oh-my-claude-code/internal/version"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/llm/tools"
+	"github.com/cliffren/toc/internal/logging"
+	"github.com/cliffren/toc/internal/permission"
+	"github.com/cliffren/toc/internal/version"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"

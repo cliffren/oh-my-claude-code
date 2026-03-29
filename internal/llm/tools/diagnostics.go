@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cliffren/oh-my-claude-code/internal/lsp"
-	"github.com/cliffren/oh-my-claude-code/internal/lsp/protocol"
+	"github.com/cliffren/toc/internal/lsp"
+	"github.com/cliffren/toc/internal/lsp/protocol"
 )
 
 type DiagnosticsParams struct {

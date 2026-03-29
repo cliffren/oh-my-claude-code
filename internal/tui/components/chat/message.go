@@ -13,14 +13,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	runewidth "github.com/mattn/go-runewidth"
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/diff"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/agent"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
-	"github.com/cliffren/oh-my-claude-code/internal/message"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/diff"
+	"github.com/cliffren/toc/internal/llm/agent"
+	"github.com/cliffren/toc/internal/llm/models"
+	"github.com/cliffren/toc/internal/llm/tools"
+	"github.com/cliffren/toc/internal/message"
+	"github.com/cliffren/toc/internal/tui/styles"
+	"github.com/cliffren/toc/internal/tui/theme"
 )
 
 type uiMessageType int

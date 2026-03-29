@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/toc/internal/logging"
 	"google.golang.org/genai"
 )
 

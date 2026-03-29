@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/db"
-	"github.com/cliffren/oh-my-claude-code/internal/format"
-	"github.com/cliffren/oh-my-claude-code/internal/history"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/agent"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
-	"github.com/cliffren/oh-my-claude-code/internal/lsp"
-	"github.com/cliffren/oh-my-claude-code/internal/message"
-	"github.com/cliffren/oh-my-claude-code/internal/permission"
-	"github.com/cliffren/oh-my-claude-code/internal/session"
-	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/db"
+	"github.com/cliffren/toc/internal/format"
+	"github.com/cliffren/toc/internal/history"
+	"github.com/cliffren/toc/internal/llm/agent"
+	"github.com/cliffren/toc/internal/logging"
+	"github.com/cliffren/toc/internal/lsp"
+	"github.com/cliffren/toc/internal/message"
+	"github.com/cliffren/toc/internal/permission"
+	"github.com/cliffren/toc/internal/session"
+	"github.com/cliffren/toc/internal/tui/theme"
 )
 
 type App struct {

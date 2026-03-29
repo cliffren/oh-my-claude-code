@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cliffren/oh-my-claude-code/internal/config"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/prompt"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/provider"
-	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
-	"github.com/cliffren/oh-my-claude-code/internal/message"
-	"github.com/cliffren/oh-my-claude-code/internal/permission"
-	"github.com/cliffren/oh-my-claude-code/internal/pubsub"
-	"github.com/cliffren/oh-my-claude-code/internal/session"
+	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/llm/models"
+	"github.com/cliffren/toc/internal/llm/prompt"
+	"github.com/cliffren/toc/internal/llm/provider"
+	"github.com/cliffren/toc/internal/llm/tools"
+	"github.com/cliffren/toc/internal/logging"
+	"github.com/cliffren/toc/internal/message"
+	"github.com/cliffren/toc/internal/permission"
+	"github.com/cliffren/toc/internal/pubsub"
+	"github.com/cliffren/toc/internal/session"
 )
 
 // Common errors

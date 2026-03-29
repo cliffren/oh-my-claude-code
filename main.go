@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/cliffren/oh-my-claude-code/cmd"
-	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/toc/cmd"
+	"github.com/cliffren/toc/internal/logging"
 )
 
 func main() {
