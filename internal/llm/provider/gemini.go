@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/tools"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/message"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/message"
 	"google.golang.org/genai"
 )
 

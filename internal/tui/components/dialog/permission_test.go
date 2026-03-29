@@ -3,8 +3,8 @@ package dialog
 import (
 	"testing"
 
-	"github.com/Krontx/oh-my-claude-code/internal/llm/tools"
-	"github.com/Krontx/oh-my-claude-code/internal/permission"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
+	"github.com/cliffren/oh-my-claude-code/internal/permission"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

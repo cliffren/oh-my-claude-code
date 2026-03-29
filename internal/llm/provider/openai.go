@@ -11,11 +11,11 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/shared"
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/tools"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/message"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/message"
 )
 
 type openaiOptions struct {

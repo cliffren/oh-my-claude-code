@@ -6,13 +6,13 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	// "github.com/charmbracelet/x/ansi" // LSP disabled
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/message"
-	"github.com/Krontx/oh-my-claude-code/internal/session"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/components/dialog"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
-	"github.com/Krontx/oh-my-claude-code/internal/version"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/message"
+	"github.com/cliffren/oh-my-claude-code/internal/session"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/components/dialog"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/oh-my-claude-code/internal/version"
 )
 
 type SendMsg struct {
@@ -98,7 +98,7 @@ func logo(width int) string {
 }
 
 func repo(width int) string {
-	repo := "https://github.com/Krontx/oh-my-claude-code"
+	repo := "https://github.com/cliffren/oh-my-claude-code"
 	t := theme.CurrentTheme()
 
 	return styles.BaseStyle().

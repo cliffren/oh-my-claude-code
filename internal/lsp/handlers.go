@@ -3,10 +3,10 @@ package lsp
 import (
 	"encoding/json"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/lsp/protocol"
-	"github.com/Krontx/oh-my-claude-code/internal/lsp/util"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/lsp/protocol"
+	"github.com/cliffren/oh-my-claude-code/internal/lsp/util"
 )
 
 // Requests

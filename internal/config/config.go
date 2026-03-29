@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
 	"github.com/spf13/viper"
 )
 

@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/prompt"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/provider"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/tools"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/message"
-	"github.com/Krontx/oh-my-claude-code/internal/permission"
-	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
-	"github.com/Krontx/oh-my-claude-code/internal/session"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/prompt"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/provider"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/tools"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/message"
+	"github.com/cliffren/oh-my-claude-code/internal/permission"
+	"github.com/cliffren/oh-my-claude-code/internal/pubsub"
+	"github.com/cliffren/oh-my-claude-code/internal/session"
 )
 
 // Common errors

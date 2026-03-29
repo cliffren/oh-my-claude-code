@@ -2,7 +2,7 @@ package styles
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
 )
 
 var (

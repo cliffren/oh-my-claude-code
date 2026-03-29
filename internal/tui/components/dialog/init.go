@@ -5,9 +5,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/util"
 )
 
 // InitDialogCmp is a component that asks the user if they want to initialize the project.

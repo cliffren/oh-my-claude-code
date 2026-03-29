@@ -1,6 +1,6 @@
 package dialog
 
-import selectionpkg "github.com/Krontx/oh-my-claude-code/internal/tui/selection"
+import selectionpkg "github.com/cliffren/oh-my-claude-code/internal/tui/selection"
 
 type clipboardFunc = selectionpkg.ClipboardFunc
 

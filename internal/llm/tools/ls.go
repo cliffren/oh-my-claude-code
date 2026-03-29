@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
 )
 
 type LSParams struct {

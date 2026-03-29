@@ -12,11 +12,11 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/bedrock"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
-	toolsPkg "github.com/Krontx/oh-my-claude-code/internal/llm/tools"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/message"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
+	toolsPkg "github.com/cliffren/oh-my-claude-code/internal/llm/tools"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/message"
 )
 
 type anthropicOptions struct {

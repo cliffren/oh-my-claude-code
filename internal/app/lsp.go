@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/lsp"
-	"github.com/Krontx/oh-my-claude-code/internal/lsp/watcher"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/lsp"
+	"github.com/cliffren/oh-my-claude-code/internal/lsp/watcher"
 )
 
 func (app *App) initLSPClients(ctx context.Context) {

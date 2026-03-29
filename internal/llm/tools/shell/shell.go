@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
 )
 
 type PersistentShell struct {

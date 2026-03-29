@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
 )
 
 func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) string {

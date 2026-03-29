@@ -8,9 +8,9 @@ import (
 	"github.com/muesli/ansi"
 	"github.com/muesli/reflow/truncate"
 	"github.com/muesli/termenv"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/util"
 )
 
 // Most of this code is borrowed from

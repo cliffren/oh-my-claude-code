@@ -5,8 +5,8 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
-	"github.com/Krontx/oh-my-claude-code/internal/db"
-	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
+	"github.com/cliffren/oh-my-claude-code/internal/db"
+	"github.com/cliffren/oh-my-claude-code/internal/pubsub"
 )
 
 type Session struct {

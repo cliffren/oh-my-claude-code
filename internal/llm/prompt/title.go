@@ -1,6 +1,6 @@
 package prompt
 
-import "github.com/Krontx/oh-my-claude-code/internal/llm/models"
+import "github.com/cliffren/oh-my-claude-code/internal/llm/models"
 
 func TitlePrompt(_ models.ModelProvider) string {
 	return `Generate a very short title for the user's message.

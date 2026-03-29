@@ -3,8 +3,8 @@ package tui
 import (
 	"testing"
 
-	"github.com/Krontx/oh-my-claude-code/internal/app"
-	// "github.com/Krontx/oh-my-claude-code/internal/lsp" // LSP disabled
+	"github.com/cliffren/oh-my-claude-code/internal/app"
+	// "github.com/cliffren/oh-my-claude-code/internal/lsp" // LSP disabled
 	tea "github.com/charmbracelet/bubbletea"
 )
 

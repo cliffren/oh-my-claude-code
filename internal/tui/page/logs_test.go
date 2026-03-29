@@ -3,7 +3,7 @@ package page
 import (
 	"testing"
 
-	"github.com/Krontx/oh-my-claude-code/internal/tui/layout"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/layout"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )

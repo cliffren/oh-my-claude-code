@@ -7,12 +7,12 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/layout"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/pubsub"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/layout"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/util"
 )
 
 type TableComponent interface {

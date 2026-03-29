@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

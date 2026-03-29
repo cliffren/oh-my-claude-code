@@ -8,8 +8,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
 )
 
 // Write writes an LSP message to the given writer

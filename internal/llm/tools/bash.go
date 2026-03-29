@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/tools/shell"
-	"github.com/Krontx/oh-my-claude-code/internal/permission"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/tools/shell"
+	"github.com/cliffren/oh-my-claude-code/internal/permission"
 )
 
 type BashParams struct {

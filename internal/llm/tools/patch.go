@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/diff"
-	"github.com/Krontx/oh-my-claude-code/internal/history"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/lsp"
-	"github.com/Krontx/oh-my-claude-code/internal/permission"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/diff"
+	"github.com/cliffren/oh-my-claude-code/internal/history"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/lsp"
+	"github.com/cliffren/oh-my-claude-code/internal/permission"
 )
 
 type PatchParams struct {

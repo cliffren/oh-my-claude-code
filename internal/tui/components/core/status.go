@@ -7,17 +7,17 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/llm/models"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/llm/models"
 	// LSP disabled — uncomment to re-enable
-	// "github.com/Krontx/oh-my-claude-code/internal/lsp"
-	// "github.com/Krontx/oh-my-claude-code/internal/lsp/protocol"
-	"github.com/Krontx/oh-my-claude-code/internal/pubsub"
-	"github.com/Krontx/oh-my-claude-code/internal/session"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/components/chat"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/styles"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/theme"
-	"github.com/Krontx/oh-my-claude-code/internal/tui/util"
+	// "github.com/cliffren/oh-my-claude-code/internal/lsp"
+	// "github.com/cliffren/oh-my-claude-code/internal/lsp/protocol"
+	"github.com/cliffren/oh-my-claude-code/internal/pubsub"
+	"github.com/cliffren/oh-my-claude-code/internal/session"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/components/chat"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/styles"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/theme"
+	"github.com/cliffren/oh-my-claude-code/internal/tui/util"
 )
 
 type StatusCmp interface {

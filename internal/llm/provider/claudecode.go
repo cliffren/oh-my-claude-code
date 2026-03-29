@@ -11,9 +11,9 @@ import (
 	"strings"
 	"sync"
 
-	toolsPkg "github.com/Krontx/oh-my-claude-code/internal/llm/tools"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
-	"github.com/Krontx/oh-my-claude-code/internal/message"
+	toolsPkg "github.com/cliffren/oh-my-claude-code/internal/llm/tools"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/message"
 )
 
 // ---------------------------------------------------------------------------

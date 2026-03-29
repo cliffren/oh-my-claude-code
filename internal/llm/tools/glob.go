@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Krontx/oh-my-claude-code/internal/config"
-	"github.com/Krontx/oh-my-claude-code/internal/fileutil"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/internal/config"
+	"github.com/cliffren/oh-my-claude-code/internal/fileutil"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
 )
 
 const (

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/Krontx/oh-my-claude-code/cmd"
-	"github.com/Krontx/oh-my-claude-code/internal/logging"
+	"github.com/cliffren/oh-my-claude-code/cmd"
+	"github.com/cliffren/oh-my-claude-code/internal/logging"
 )
 
 func main() {
