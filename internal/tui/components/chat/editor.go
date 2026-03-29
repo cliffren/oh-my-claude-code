@@ -324,7 +324,31 @@ func CreateTextArea(existing *textarea.Model) textarea.Model {
 	return ta
 }
 
-func NewEditorCmp(app *app.App) tea.Model {
+// EditorCmp is the public interface for the editor component.
+type EditorCmp interface {
+	tea.Model
+	layout.Sizeable
+	layout.Bindings
+	// CursorRow returns the visible row of the text cursor within the textarea
+	// (0-indexed, relative to the top of the textarea content area).
+	CursorRow() int
+	// CursorCol returns the visual column offset of the cursor within the
+	// current visual line (0-indexed, unicode-width-aware).
+	CursorCol() int
+}
+
+func (m *editorCmp) CursorRow() int {
+	li := m.textarea.LineInfo()
+	return m.textarea.Line() + li.RowOffset
+}
+
+func (m *editorCmp) CursorCol() int {
+	// CharOffset is the visual-width offset from the start of the current
+	// visual line — correct for wide/multi-byte characters.
+	return m.textarea.LineInfo().CharOffset
+}
+
+func NewEditorCmp(app *app.App) EditorCmp {
 	ta := CreateTextArea(nil)
 	return &editorCmp{
 		app:      app,

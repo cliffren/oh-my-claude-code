@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -123,8 +124,11 @@ MCP servers, custom agents, plan mode — rendered in a polished terminal interf
 		if continueSession {
 			tuiOpts = append(tuiOpts, tui.WithContinueSession())
 		}
+		var cursorPos atomic.Int64
+		tuiOpts = append(tuiOpts, tui.WithCursorPos(&cursorPos))
 		program := tea.NewProgram(
 			tui.New(app, tuiOpts...),
+			tea.WithOutput(newIMECursorWriter(os.Stdout, &cursorPos)),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 			tea.WithFilter(mouseFilter.filter),

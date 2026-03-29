@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Krontx/oh-my-claude-code/internal/app"
@@ -29,6 +30,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// physicalCursorPoser is implemented by pages that can report where the
+// physical terminal cursor should be placed (for IME window positioning).
+type physicalCursorPoser interface {
+	PhysicalCursorPos(screenHeight int) (row, col int)
+}
 
 type keyMap struct {
 	Logs           key.Binding
@@ -134,6 +141,7 @@ type appModel struct {
 	status          core.StatusCmp
 	app             *app.App
 	selectedSession session.Session
+	cursorPos       *atomic.Int64 // packed (row<<32|col) shared with imeCursorWriter; nil = disabled
 
 	showPermissions bool
 	permissions     dialog.PermissionDialogCmp
@@ -1150,6 +1158,16 @@ func (a appModel) View() string {
 		)
 	}
 
+	// Update physical cursor row for IME candidate window positioning.
+	// View() and Write() run in the same renderer goroutine, so this value is
+	// always fresh when imeCursorWriter intercepts the frame's cursor escape.
+	if a.cursorPos != nil {
+		if p, ok := a.pages[a.currentPage].(physicalCursorPoser); ok {
+			row, col := p.PhysicalCursorPos(a.height)
+			a.cursorPos.Store(int64(row)<<32 | int64(col))
+		}
+	}
+
 	return appView
 }
 
@@ -1158,6 +1176,15 @@ type Option func(*appModel)
 func WithContinueSession() Option {
 	return func(m *appModel) {
 		m.continueSession = true
+	}
+}
+
+// WithCursorPos passes a shared atomic that the tui model updates each frame
+// with the packed cursor position (row<<32|col). imeCursorWriter reads this to
+// position the physical terminal cursor at the actual typing location.
+func WithCursorPos(pos *atomic.Int64) Option {
+	return func(m *appModel) {
+		m.cursorPos = pos
 	}
 }
 

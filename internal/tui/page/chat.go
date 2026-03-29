@@ -22,11 +22,30 @@ var ChatPage PageID = "chat"
 type chatPage struct {
 	app                  *app.App
 	editor               layout.Container
+	editorCmp            chat.EditorCmp // direct ref for cursor position (always same pointer)
 	messages             layout.Container
 	layout               layout.SplitPaneLayout
 	session              session.Session
 	completionDialog     dialog.CompletionDialog
 	showCompletionDialog bool
+}
+
+// PhysicalCursorPos returns the 1-indexed terminal (row, col) for the text
+// cursor, used to position the physical terminal cursor so the IME candidate
+// window appears next to the actual typing location.
+// screenHeight is the height of the TUI content area (excluding status bar).
+func (p *chatPage) PhysicalCursorPos(screenHeight int) (row, col int) {
+	_, editorH := p.editor.GetSize()
+	// Editor container occupies the bottom editorH rows.
+	// First content row (after top border): screenHeight - editorH + 2
+	// (+1 to convert 0-indexed layout rows to 1-indexed terminal rows,
+	//  +1 for the top border row of the editor container)
+	firstContentRow := screenHeight - editorH + 2
+	row = firstContentRow + p.editorCmp.CursorRow()
+	// Column layout (1-indexed): style-left-pad(1) + ">"(1) + textarea-prompt(1) + CharOffset
+	// → col = 3 + CharOffset + 1 = CharOffset + 4
+	col = p.editorCmp.CursorCol() + 4
+	return
 }
 
 type ChatKeyMap struct {
@@ -229,13 +248,15 @@ func NewChatPage(app *app.App) tea.Model {
 		chat.NewMessagesCmp(app),
 		layout.WithPadding(1, 1, 0, 1),
 	)
+	editorCmpInstance := chat.NewEditorCmp(app)
 	editorContainer := layout.NewContainer(
-		chat.NewEditorCmp(app),
+		editorCmpInstance,
 		layout.WithBorder(true, false, false, false),
 	)
 	return &chatPage{
 		app:              app,
 		editor:           editorContainer,
+		editorCmp:        editorCmpInstance,
 		messages:         messagesContainer,
 		completionDialog: completionDialog,
 		layout: layout.NewSplitPane(
