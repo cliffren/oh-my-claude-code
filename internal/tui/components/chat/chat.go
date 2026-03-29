@@ -76,7 +76,7 @@ func header(width int) string {
 // }
 
 func logo(width int) string {
-	logo := fmt.Sprintf("%s %s", styles.OpenCodeIcon, "omcc")
+	logo := fmt.Sprintf("%s %s", styles.OpenCodeIcon, "toc")
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 

@@ -150,7 +150,7 @@ func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption
 			WithOpenAIBaseURL("https://openrouter.ai/api/v1"),
 			WithOpenAIExtraHeaders(map[string]string{
 				"HTTP-Referer": "https://github.com/Krontx/oh-my-claude-code",
-				"X-Title":      "omcc",
+				"X-Title":      "toc",
 			}),
 		)
 		return &baseProvider[OpenAIClient]{

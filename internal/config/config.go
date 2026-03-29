@@ -99,9 +99,9 @@ type Config struct {
 
 // Application constants
 const (
-	defaultDataDirectory = ".omcc"
+	defaultDataDirectory = ".toc"
 	defaultLogLevel      = "info"
-	appName              = "omcc"
+	appName              = "toc"
 
 	MaxTokensFallbackDefault = 4096
 )
@@ -118,8 +118,8 @@ var defaultContextPaths = []string{
 	"OpenCode.local.md",
 	"OPENCODE.md",
 	"OPENCODE.local.md",
-	"omcc.md",
-	"omcc.local.md",
+	"toc.md",
+	"toc.local.md",
 }
 
 // Global configuration instance

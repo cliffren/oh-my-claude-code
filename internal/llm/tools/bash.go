@@ -122,15 +122,15 @@ When the user asks you to create a new git commit, follow these steps carefully:
 </commit_analysis>
 
 4. Create the commit with a message ending with:
-🤖 Generated with omcc
+🤖 Generated with toc
 
 - In order to ensure good formatting, ALWAYS pass the commit message via a HEREDOC, a la this example:
 <example>
 git commit -m "$(cat <<'EOF'
  Commit message here.
 
- 🤖 Generated with omcc
- Co-Authored-By: omcc <noreply@omcc.dev>
+ 🤖 Generated with toc
+ Co-Authored-By: toc <noreply@toc.dev>
  EOF
  )"
 </example>
@@ -192,7 +192,7 @@ gh pr create --title "the pr title" --body "$(cat <<'EOF'
 ## Test plan
 [Checklist of TODOs for testing the pull request...]
 
-🤖 Generated with omcc
+🤖 Generated with toc
 EOF
 )"
 </example>

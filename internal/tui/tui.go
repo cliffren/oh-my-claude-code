@@ -1374,7 +1374,7 @@ func (a *appModel) updateSlashCommandsFromInit(initData *provider.InitData) {
 const initCacheFile = "init_cache.json"
 
 func initCachePath() string {
-	return filepath.Join(config.WorkingDirectory(), ".omcc", initCacheFile)
+	return filepath.Join(config.WorkingDirectory(), ".toc", initCacheFile)
 }
 
 func loadCachedInitData() (result *provider.InitData) {

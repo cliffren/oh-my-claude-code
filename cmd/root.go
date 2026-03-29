@@ -23,29 +23,29 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "omcc",
+	Use:   "toc",
 	Short: "A polished TUI wrapper for Claude Code",
-	Long: `oh-my-claude-code (omcc) wraps Claude Code's full agent engine in a
+	Long: `toc wraps Claude Code's full agent engine in a
 beautiful Bubble Tea TUI. You get Claude Code's complete capabilities — tools, hooks,
 MCP servers, custom agents, plan mode — rendered in a polished terminal interface.`,
 	Example: `
   # Run in interactive mode
-  omcc
+  toc
 
   # Run with debug logging
-  omcc -d
+  toc -d
 
   # Run with debug logging in a specific directory
-  omcc -d -c /path/to/project
+  toc -d -c /path/to/project
 
   # Print version
-  omcc -v
+  toc -v
 
   # Run a single non-interactive prompt
-  omcc -p "Explain the use of context in Go"
+  toc -p "Explain the use of context in Go"
 
   # Run a single non-interactive prompt with JSON output format
-  omcc -p "Explain the use of context in Go" -f json
+  toc -p "Explain the use of context in Go" -f json
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// If the help flag is set, show the help message
