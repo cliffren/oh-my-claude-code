@@ -185,6 +185,8 @@ func (s *sessionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case tea.MouseMsg:
+		return s, nil
 	case tea.WindowSizeMsg:
 		s.width = msg.Width
 		s.height = msg.Height

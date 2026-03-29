@@ -70,6 +70,7 @@ type commandDialogCmp struct {
 	filtered     []Command
 	selectedIdx  int
 	maxVisible   int
+	fixedWidth   int // computed once in SetCommands, stays constant
 	width        int
 	height       int
 }
@@ -125,6 +126,10 @@ func (c *commandDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return c, nil
 		}
+	case tea.MouseMsg:
+		// Ignore all mouse events — prevents scroll escape sequences
+		// from being interpreted as text input.
+		return c, nil
 	case tea.WindowSizeMsg:
 		c.width = msg.Width
 		c.height = msg.Height
@@ -171,22 +176,9 @@ func (c *commandDialogCmp) View() string {
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 
-	maxWidth := 50
-
-	for _, cmd := range c.filtered {
-		w := len(cmd.Title) + 4
-		if w > maxWidth {
-			maxWidth = w
-		}
-		if cmd.Description != "" {
-			w = len(cmd.Description) + 4
-			if w > maxWidth {
-				maxWidth = w
-			}
-		}
-	}
-	if maxWidth > 60 {
-		maxWidth = 60
+	maxWidth := c.fixedWidth
+	if maxWidth == 0 {
+		maxWidth = 50
 	}
 
 	// Search input
@@ -267,11 +259,16 @@ func (c *commandDialogCmp) View() string {
 		baseStyle.Width(maxWidth).Render(""),
 	)
 
+	// Fixed outer dimensions so the dialog never resizes during search/scroll.
+	fixedOuterWidth := maxWidth + 8  // content + padding(2*2) + border(2)
+	fixedOuterHeight := fixedListHeight + 7 // searchBox(1) + sep(1) + list + sep(1) + padding(2) + border(2)
+
 	return baseStyle.Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
 		BorderBackground(t.Background()).
 		BorderForeground(t.TextMuted()).
-		Width(lipgloss.Width(content) + 4).
+		Width(fixedOuterWidth).
+		Height(fixedOuterHeight).
 		Render(content)
 }
 
@@ -282,6 +279,24 @@ func (c *commandDialogCmp) BindingKeys() []key.Binding {
 func (c *commandDialogCmp) SetCommands(commands []Command) {
 	c.allCommands = commands
 	c.searchInput.SetValue("")
+
+	// Compute fixed width from ALL commands (not filtered) so it never changes.
+	w := 50
+	for _, cmd := range commands {
+		if tw := len(cmd.Title) + 4; tw > w {
+			w = tw
+		}
+		if cmd.Description != "" {
+			if dw := len(cmd.Description) + 4; dw > w {
+				w = dw
+			}
+		}
+	}
+	if w > 60 {
+		w = 60
+	}
+	c.fixedWidth = w
+
 	c.applyFilter()
 }
 

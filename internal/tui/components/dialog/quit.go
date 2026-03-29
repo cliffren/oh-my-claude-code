@@ -97,10 +97,11 @@ func (q *quitDialogCmp) View() string {
 		noStyle = noStyle.Background(t.Background()).Foreground(t.Primary())
 	}
 
+	hint := baseStyle.Foreground(t.TextMuted()).Render("ctrl+c ")
 	yesButton := yesStyle.Padding(0, 1).Render("Yes")
 	noButton := noStyle.Padding(0, 1).Render("No")
 
-	buttons := lipgloss.JoinHorizontal(lipgloss.Left, yesButton, spacerStyle.Render("  "), noButton)
+	buttons := lipgloss.JoinHorizontal(lipgloss.Left, hint, yesButton, spacerStyle.Render("  "), noButton)
 
 	width := lipgloss.Width(question)
 	remainingWidth := width - lipgloss.Width(buttons)

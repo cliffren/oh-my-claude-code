@@ -100,17 +100,17 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		p.session = msg
+	case chat.SessionClearedMsg:
+		p.session = session.Session{}
+		cmds = append(cmds, p.clearSidebar())
+		// Continue propagation to child components (list, status, etc.)
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, keyMap.ShowCompletionDialog):
 			p.showCompletionDialog = true
 			// Continue sending keys to layout->chat
 		case key.Matches(msg, keyMap.NewSession):
-			p.session = session.Session{}
-			return p, tea.Batch(
-				p.clearSidebar(),
-				util.CmdHandler(chat.SessionClearedMsg{}),
-			)
+			return p, util.CmdHandler(chat.SessionClearedMsg{})
 		case key.Matches(msg, keyMap.Cancel):
 			if p.session.ID != "" {
 				// Cancel the current session's generation process

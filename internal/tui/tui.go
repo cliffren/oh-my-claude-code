@@ -500,6 +500,10 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		case "new":
 			return a, util.CmdHandler(chat.SessionClearedMsg{})
+		case "permissions":
+			a.permissionModeDialog.SetCurrentMode(a.app.CoderAgent.PermissionMode())
+			a.showPermissionModeDialog = true
+			return a, nil
 		}
 		return a, nil
 
@@ -1257,27 +1261,50 @@ func internalSlashCommands() []dialog.Command {
 		{ID: "help", Title: "/help", Description: "Show help", Category: "TUI", Handler: func(cmd dialog.Command) tea.Cmd {
 			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "help"})
 		}},
+		{ID: "permissions", Title: "/permissions", Description: "Switch permission mode (ctrl+\\)", Category: "TUI", Handler: func(cmd dialog.Command) tea.Cmd {
+			return util.CmdHandler(chat.InternalSlashCommandMsg{Command: "permissions"})
+		}},
 	}
 }
 
 var cliCommandDescriptions = map[string]string{
-	"compact":         "Compact conversation context",
-	"review":          "Review code changes",
-	"cost":            "Show session cost and token usage",
-	"context":         "Show context window usage",
-	"init":            "Initialize CLAUDE.md for project",
-	"pr-comments":     "Review PR comments",
-	"security-review": "Security review of code",
-	"release-notes":   "Generate release notes",
-	"insights":        "Show usage insights",
-	"heapdump":        "Dump heap for debugging",
-	"extra-usage":     "Show extra usage info",
+	"compact":            "Compact conversation context",
+	"review":             "Review code changes",
+	"cost":               "Show session cost and token usage",
+	"context":            "Show context window usage",
+	"init":               "Initialize CLAUDE.md for project",
+	"pr-comments":        "Review PR comments",
+	"security-review":    "Security review of code",
+	"release-notes":      "Generate release notes",
+	"insights":           "Show usage insights",
+	"heapdump":           "Dump heap for debugging",
+	"extra-usage":        "Show extra usage info",
+	"update-config":      "Update Claude Code configuration",
+	"debug":              "Debug current issue step by step",
+	"simplify":           "Review and simplify code changes",
+	"batch":              "Run batch operations on files",
+	"loop":               "Run iterative refinement loop",
+	"schedule":           "Schedule a recurring task",
+	"claude-api":         "Work with the Claude API",
+	"ui-ux-pro-max":      "UI/UX design and improvement",
+	"theme-factory":      "Create or customize themes",
+	"doc-coauthoring":    "Co-author documentation",
+	"codebase-research":  "Deep dive into codebase structure",
+	"xlsx":               "Work with Excel spreadsheets",
+	"memory":             "Manage conversation memory",
+	"doctor":             "Diagnose environment issues",
+	"bug":                "Report a bug",
+	"terminal-setup":     "Configure terminal settings",
+	"login":              "Log in to Claude",
+	"logout":             "Log out of Claude",
+	"status":             "Show account status",
 }
 
 func (a *appModel) updateSlashCommandsFromInit(initData *provider.InitData) {
 	internalIDs := map[string]bool{
 		"model": true, "sessions": true, "theme": true,
 		"effort": true, "new": true, "help": true,
+		"permissions": true,
 	}
 
 	cmds := internalSlashCommands()
@@ -1288,6 +1315,9 @@ func (a *appModel) updateSlashCommandsFromInit(initData *provider.InitData) {
 		}
 		name := cmdName
 		desc := cliCommandDescriptions[name]
+		if desc == "" {
+			desc = "claude: /" + name
+		}
 		cmds = append(cmds, dialog.Command{
 			ID:          "cc-" + name,
 			Title:       "/" + name,
