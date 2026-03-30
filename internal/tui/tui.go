@@ -13,6 +13,7 @@ import (
 	"github.com/cliffren/toc/internal/app"
 	"github.com/cliffren/toc/internal/config"
 	"github.com/cliffren/toc/internal/llm/agent"
+	"github.com/cliffren/toc/internal/llm/models"
 	"github.com/cliffren/toc/internal/llm/provider"
 	"github.com/cliffren/toc/internal/logging"
 	"github.com/cliffren/toc/internal/permission"
@@ -408,15 +409,27 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		a.compactingMessage = payload.Progress
 
-		if payload.Done && payload.Type == agent.AgentEventTypeSummarize {
+		if payload.Type == agent.AgentEventTypeCompacting {
+			a.isCompacting = !payload.Done
+			if payload.Done {
+				a.compactingMessage = ""
+			} else {
+				a.compactingMessage = "Compacting..."
+			}
+			return a, nil
+		} else if payload.Done && payload.Type == agent.AgentEventTypeSummarize {
 			a.isCompacting = false
 			return a, util.ReportInfo("Session summarization complete")
 		} else if payload.Done && payload.Type == agent.AgentEventTypeResponse && a.selectedSession.ID != "" {
 			model := a.app.CoderAgent.Model()
-			contextWindow := model.ContextWindow
-			tokens := a.selectedSession.CompletionTokens + a.selectedSession.PromptTokens
-			if (tokens >= int64(float64(contextWindow)*0.95)) && config.Get().AutoCompact {
-				return a, util.CmdHandler(startCompactSessionMsg{})
+			// Claude Code CLI manages its own context window and compaction internally;
+			// skip toc's auto-compact for this provider.
+			if model.Provider != models.ProviderClaudeCode {
+				contextWindow := model.ContextWindow
+				tokens := a.selectedSession.CompletionTokens + a.selectedSession.PromptTokens
+				if (tokens >= int64(float64(contextWindow)*0.95)) && config.Get().AutoCompact {
+					return a, util.CmdHandler(startCompactSessionMsg{})
+				}
 			}
 		}
 		// Continue listening for events

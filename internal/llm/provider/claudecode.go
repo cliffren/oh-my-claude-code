@@ -40,6 +40,8 @@ type claudeEvent struct {
 	Usage         *claudeUsage `json:"usage,omitempty"`
 	IsError       bool         `json:"is_error,omitempty"`
 	Result        string       `json:"result,omitempty"`
+	// status fields (only present when type == "system", subtype == "status")
+	Status string `json:"status,omitempty"` // "compacting" or null/""
 	// api_retry fields (only present when type == "system", subtype == "api_retry")
 	Attempt      int    `json:"attempt,omitempty"`
 	MaxRetries   int    `json:"max_retries,omitempty"`
@@ -409,6 +411,11 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 				eventChan <- ProviderEvent{
 					Type:    EventWarning,
 					Content: msg,
+				}
+			} else if event.Subtype == "status" {
+				eventChan <- ProviderEvent{
+					Type:    EventCompacting,
+					Content: event.Status, // "compacting" = started, "" = done
 				}
 			}
 

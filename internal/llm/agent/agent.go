@@ -41,10 +41,11 @@ const (
 type AgentEventType string
 
 const (
-	AgentEventTypeError     AgentEventType = "error"
-	AgentEventTypeResponse  AgentEventType = "response"
-	AgentEventTypeSummarize AgentEventType = "summarize"
-	AgentEventTypeInit      AgentEventType = "init"
+	AgentEventTypeError      AgentEventType = "error"
+	AgentEventTypeResponse   AgentEventType = "response"
+	AgentEventTypeSummarize  AgentEventType = "summarize"
+	AgentEventTypeInit       AgentEventType = "init"
+	AgentEventTypeCompacting AgentEventType = "compacting"
 )
 
 type AgentEvent struct {
@@ -547,6 +548,13 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		return nil
 	case provider.EventWarning:
 		logging.InfoPersist(event.Content)
+		return nil
+	case provider.EventCompacting:
+		done := event.Content != "compacting"
+		a.Publish(pubsub.CreatedEvent, AgentEvent{
+			Type: AgentEventTypeCompacting,
+			Done: done,
+		})
 		return nil
 	case provider.EventError:
 		if errors.Is(event.Error, context.Canceled) {

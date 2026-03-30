@@ -25,8 +25,9 @@ const (
 	EventComplete         EventType = "complete"
 	EventInit             EventType = "init"
 	EventError            EventType = "error"
-	EventWarning          EventType = "warning"
+	EventWarning           EventType = "warning"
 	EventPermissionRequest EventType = "permission_request"
+	EventCompacting        EventType = "compacting"
 )
 
 // ProviderPermissionRequest carries a permission request from Claude Code CLI.
