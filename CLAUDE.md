@@ -45,6 +45,7 @@ internal/
 
 ## Conventions
 
+- Bug fix workflow: when a bug is reported, first write a test that reproduces the bug (test should fail), then fix the code and verify the test passes.
 - Go module: `github.com/cliffren/toc`
 - Config dir: `~/.toc/` (migrated from `.omcc`)
 - Active dev branch: `feature/chat-selection-scroll`, merge into `main` after each session

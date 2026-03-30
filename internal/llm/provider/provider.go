@@ -67,6 +67,13 @@ type InitData struct {
 	Model          string
 	PermissionMode string
 	Version        string
+	SessionID      string // Claude Code CLI session ID (for --resume on restart)
+}
+
+// SessionResumer is implemented by providers that support resuming a prior
+// external session (e.g. Claude Code CLI --resume).
+type SessionResumer interface {
+	SetResumeSessionID(id string)
 }
 
 type ProviderEvent struct {
@@ -223,6 +230,23 @@ func (p *baseProvider[C]) SendMessages(ctx context.Context, messages []message.M
 
 func (p *baseProvider[C]) Model() models.Model {
 	return p.options.model
+}
+
+// SendControlResponse forwards to the underlying client if it implements
+// ControlResponder. This allows agent.go to type-assert on the Provider.
+func (p *baseProvider[C]) SendControlResponse(requestID, sessionID string, allow bool) error {
+	if cr, ok := any(p.client).(ControlResponder); ok {
+		return cr.SendControlResponse(requestID, sessionID, allow)
+	}
+	return fmt.Errorf("provider does not support control responses")
+}
+
+// SetResumeSessionID forwards to the underlying client if it implements
+// SessionResumer.
+func (p *baseProvider[C]) SetResumeSessionID(id string) {
+	if sr, ok := any(p.client).(SessionResumer); ok {
+		sr.SetResumeSessionID(id)
+	}
 }
 
 func (p *baseProvider[C]) StreamResponse(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent {

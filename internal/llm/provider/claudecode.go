@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -126,6 +127,10 @@ type claudeCodeClient struct {
 	stdinCh chan []byte
 	stdinMu sync.Mutex
 
+	// pendingInputs stores the raw tool input for each pending control_request
+	// so SendControlResponse can echo it back as updatedInput.
+	pendingInputs sync.Map // requestID → json.RawMessage
+
 	// conn is the persistent process connection; nil if none is live.
 	connMu sync.Mutex
 	conn   *procConn
@@ -134,6 +139,31 @@ type claudeCodeClient struct {
 func newClaudeCodeClient(opts providerClientOptions) ClaudeCodeClient {
 	return &claudeCodeClient{
 		providerOptions: opts,
+	}
+}
+
+// SetResumeSessionID implements SessionResumer. It pre-seeds the session ID
+// so the next spawned process receives --resume and continues the prior session.
+func (c *claudeCodeClient) SetResumeSessionID(id string) {
+	c.mu.Lock()
+	c.sessionID = id
+	c.mu.Unlock()
+}
+
+// DeleteClaudeSession removes the session file for the given Claude Code
+// session ID from the ~/.claude/projects/ directory tree.
+func DeleteClaudeSession(claudeSessionID string) {
+	if claudeSessionID == "" {
+		return
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	pattern := filepath.Join(homeDir, ".claude", "projects", "*", claudeSessionID+".jsonl")
+	matches, _ := filepath.Glob(pattern)
+	for _, m := range matches {
+		_ = os.Remove(m)
 	}
 }
 
@@ -162,12 +192,19 @@ type claudeControlResponseBody struct {
 }
 
 type claudeControlResponseData struct {
-	Behavior string `json:"behavior"`
+	Behavior     string          `json:"behavior"`
+	UpdatedInput json.RawMessage `json:"updatedInput,omitempty"`
 }
 
 // SendControlResponse writes an allow/deny response for a pending control_request
 // back to the Claude Code process via stdin.
 func (c *claudeCodeClient) SendControlResponse(requestID, sessionID string, allow bool) error {
+	// Retrieve and remove the stored tool input for this request.
+	var rawInput json.RawMessage
+	if v, ok := c.pendingInputs.LoadAndDelete(requestID); ok {
+		rawInput = v.(json.RawMessage)
+	}
+
 	var resp claudeControlResponse
 	if allow {
 		resp = claudeControlResponse{
@@ -176,7 +213,7 @@ func (c *claudeCodeClient) SendControlResponse(requestID, sessionID string, allo
 			Response: &claudeControlResponseBody{
 				Subtype:   "success",
 				RequestID: requestID,
-				Response:  &claudeControlResponseData{Behavior: "allow"},
+				Response:  &claudeControlResponseData{Behavior: "allow", UpdatedInput: rawInput},
 			},
 		}
 	} else {
@@ -218,20 +255,24 @@ func (c *claudeCodeClient) SendControlResponse(requestID, sessionID string, allo
 // buildCommand constructs the exec.Cmd for the claude CLI process.
 func (c *claudeCodeClient) buildCommand(ctx context.Context) *exec.Cmd {
 	args := []string{
-		"--print",
 		"--output-format", "stream-json",
 		"--input-format", "stream-json",
 		"--verbose",
 		"--max-turns", "0", // unlimited turns
 		"--model", string(c.providerOptions.model.APIModel),
+		// Route tool permission prompts through stdin/stdout control protocol
+		// so toc can show its own permission dialog. Without this flag the CLI
+		// either auto-approves or silently denies tools.
+		"--permission-prompt-tool", "stdio",
 	}
 
 	if c.providerOptions.reasoningEffort != "" && c.providerOptions.model.CanReason {
 		args = append(args, "--effort", c.providerOptions.reasoningEffort)
 	}
 
-	if c.providerOptions.permissionMode != "" && c.providerOptions.permissionMode != "default" {
-		args = append(args, "--permission-mode", c.providerOptions.permissionMode)
+	permMode := c.providerOptions.permissionMode
+	if permMode != "" && permMode != "default" {
+		args = append(args, "--permission-mode", permMode)
 	}
 
 	if c.providerOptions.systemMessage != "" {
@@ -495,6 +536,7 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 						Model:          event.Model,
 						PermissionMode: event.PermissionModeStr,
 						Version:        event.ClaudeCodeVersion,
+						SessionID:      event.SessionID,
 					},
 				}
 			} else if event.Subtype == "api_retry" {
@@ -535,6 +577,10 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 				var inputMap map[string]any
 				if len(event.Request.Input) > 0 {
 					_ = json.Unmarshal(event.Request.Input, &inputMap)
+				}
+				// Store raw input so SendControlResponse can echo it as updatedInput.
+				if event.RequestID != "" && len(event.Request.Input) > 0 {
+					c.pendingInputs.Store(event.RequestID, event.Request.Input)
 				}
 				eventChan <- ProviderEvent{
 					Type: EventPermissionRequest,

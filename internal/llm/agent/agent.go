@@ -360,6 +360,15 @@ func (a *agent) createUserMessage(ctx context.Context, sessionID, content string
 
 func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message) (message.Message, *message.Message, error) {
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
+
+	// For providers that support session resume (e.g. Claude Code CLI), seed
+	// the stored Claude session ID so the subprocess can pick up where it left off.
+	if resumer, ok := a.provider.(provider.SessionResumer); ok {
+		if sess, err := a.sessions.Get(ctx, sessionID); err == nil && sess.ClaudeSessionID != "" {
+			resumer.SetResumeSessionID(sess.ClaudeSessionID)
+		}
+	}
+
 	eventChan := a.provider.StreamResponse(ctx, msgHistory, a.tools)
 
 	assistantMsg, err := a.messages.Create(ctx, sessionID, message.CreateMessageParams{
@@ -499,6 +508,15 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	switch event.Type {
 	case provider.EventInit:
 		if event.InitData != nil {
+			// Persist the Claude Code session ID the first time we see it.
+			// Never overwrite once set — toc sessions are one-to-one with
+			// Claude Code sessions.
+			if event.InitData.SessionID != "" {
+				if sess, err := a.sessions.Get(ctx, sessionID); err == nil && sess.ClaudeSessionID == "" {
+					sess.ClaudeSessionID = event.InitData.SessionID
+					_, _ = a.sessions.Save(ctx, sess)
+				}
+			}
 			a.Publish(pubsub.CreatedEvent, AgentEvent{
 				Type:     AgentEventTypeInit,
 				InitData: event.InitData,
