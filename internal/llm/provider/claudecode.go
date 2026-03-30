@@ -39,15 +39,27 @@ type claudeEvent struct {
 	Usage         *claudeUsage `json:"usage,omitempty"`
 	IsError       bool         `json:"is_error,omitempty"`
 	Result        string       `json:"result,omitempty"`
+	// api_retry fields (only present when type == "system", subtype == "api_retry")
+	Attempt      int    `json:"attempt,omitempty"`
+	MaxRetries   int    `json:"max_retries,omitempty"`
+	RetryDelayMs int    `json:"retry_delay_ms,omitempty"`
+	RetryError   string `json:"error,omitempty"` // error category string, e.g. "rate_limit"
 	// control_request fields
 	RequestID string                    `json:"request_id,omitempty"`
 	Request   *claudeControlRequestBody `json:"request,omitempty"`
 }
 
 type streamEvent struct {
-	Type  string      `json:"type"`
-	Delta *eventDelta `json:"delta,omitempty"`
-	Index int         `json:"index,omitempty"`
+	Type  string           `json:"type"`
+	Delta *eventDelta      `json:"delta,omitempty"`
+	Index int              `json:"index,omitempty"`
+	// For error events inside stream_event
+	StreamError *streamEventError `json:"error,omitempty"`
+}
+
+type streamEventError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
 }
 
 type eventDelta struct {
@@ -390,6 +402,13 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 						Version:        event.ClaudeCodeVersion,
 					},
 				}
+			} else if event.Subtype == "api_retry" {
+				msg := fmt.Sprintf("API retry %d/%d (delay %dms, reason: %s)",
+					event.Attempt, event.MaxRetries, event.RetryDelayMs, event.RetryError)
+				eventChan <- ProviderEvent{
+					Type:    EventWarning,
+					Content: msg,
+				}
 			}
 
 		case "stream_event":
@@ -444,6 +463,17 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 				c.sessionID = event.SessionID
 				c.mu.Unlock()
 			}
+			if event.IsError {
+				errMsg := event.Result
+				if errMsg == "" {
+					errMsg = "claude code reported an error result"
+				}
+				eventChan <- ProviderEvent{
+					Type:  EventError,
+					Error: fmt.Errorf("%s", errMsg),
+				}
+				return
+			}
 			eventChan <- ProviderEvent{
 				Type: EventComplete,
 				Response: &ProviderResponse{
@@ -451,31 +481,43 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 					ToolCalls:    nil, // Never expose tool calls — the agent loop must NOT re-execute them
 					Usage:        totalUsage,
 					FinishReason: message.FinishReasonEndTurn,
+					TotalCostUSD: event.TotalCostUsd,
 				},
 			}
 		}
 	}
 }
 
-// handleStreamEvent processes content_block_delta events (text and thinking).
+// handleStreamEvent processes inner stream events from stream_event.event.
 func (c *claudeCodeClient) handleStreamEvent(event *streamEvent, eventChan chan<- ProviderEvent, fullContent *strings.Builder) {
-	if event.Type != "content_block_delta" || event.Delta == nil {
-		return
-	}
-	switch event.Delta.Type {
-	case "text_delta":
-		if event.Delta.Text != "" {
-			fullContent.WriteString(event.Delta.Text)
+	switch event.Type {
+	case "error":
+		// API error surfaced mid-stream (e.g. overloaded, invalid request).
+		if event.StreamError != nil {
 			eventChan <- ProviderEvent{
-				Type:    EventContentDelta,
-				Content: event.Delta.Text,
+				Type:  EventError,
+				Error: fmt.Errorf("stream error (%s): %s", event.StreamError.Type, event.StreamError.Message),
 			}
 		}
-	case "thinking_delta":
-		if event.Delta.Thinking != "" {
-			eventChan <- ProviderEvent{
-				Type:     EventThinkingDelta,
-				Thinking: event.Delta.Thinking,
+	case "content_block_delta":
+		if event.Delta == nil {
+			return
+		}
+		switch event.Delta.Type {
+		case "text_delta":
+			if event.Delta.Text != "" {
+				fullContent.WriteString(event.Delta.Text)
+				eventChan <- ProviderEvent{
+					Type:    EventContentDelta,
+					Content: event.Delta.Text,
+				}
+			}
+		case "thinking_delta":
+			if event.Delta.Thinking != "" {
+				eventChan <- ProviderEvent{
+					Type:     EventThinkingDelta,
+					Thinking: event.Delta.Thinking,
+				}
 			}
 		}
 	}
