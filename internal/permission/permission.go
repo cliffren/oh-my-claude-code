@@ -1,6 +1,7 @@
 package permission
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"slices"
@@ -37,7 +38,7 @@ type Service interface {
 	GrantPersistant(permission PermissionRequest)
 	Grant(permission PermissionRequest)
 	Deny(permission PermissionRequest)
-	Request(opts CreatePermissionRequest) bool
+	Request(ctx context.Context, opts CreatePermissionRequest) bool
 	AutoApproveSession(sessionID string)
 }
 
@@ -71,7 +72,7 @@ func (s *permissionService) Deny(permission PermissionRequest) {
 	}
 }
 
-func (s *permissionService) Request(opts CreatePermissionRequest) bool {
+func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRequest) bool {
 	if slices.Contains(s.autoApproveSessions, opts.SessionID) {
 		return true
 	}
@@ -102,9 +103,13 @@ func (s *permissionService) Request(opts CreatePermissionRequest) bool {
 
 	s.Publish(pubsub.CreatedEvent, permission)
 
-	// Wait for the response with a timeout
-	resp := <-respCh
-	return resp
+	// Wait for the response or context cancellation.
+	select {
+	case resp := <-respCh:
+		return resp
+	case <-ctx.Done():
+		return false
+	}
 }
 
 func (s *permissionService) AutoApproveSession(sessionID string) {

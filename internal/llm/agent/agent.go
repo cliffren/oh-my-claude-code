@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/cliffren/toc/internal/config"
+	"github.com/cliffren/toc/internal/diff"
 	"github.com/cliffren/toc/internal/llm/models"
 	"github.com/cliffren/toc/internal/llm/prompt"
 	"github.com/cliffren/toc/internal/llm/provider"
@@ -68,8 +70,9 @@ type agent struct {
 	sessions session.Service
 	messages message.Service
 
-	tools    []tools.BaseTool
-	provider provider.Provider
+	tools      []tools.BaseTool
+	provider   provider.Provider
+	permissions permission.Service
 
 	titleProvider     provider.Provider
 	summarizeProvider provider.Provider
@@ -84,6 +87,7 @@ func NewAgent(
 	sessions session.Service,
 	messages message.Service,
 	agentTools []tools.BaseTool,
+	permissionSvc permission.Service,
 ) (Service, error) {
 	agentProvider, err := createAgentProvider(agentName)
 	if err != nil {
@@ -111,6 +115,7 @@ func NewAgent(
 		messages:          messages,
 		sessions:          sessions,
 		tools:             agentTools,
+		permissions:       permissionSvc,
 		titleProvider:     titleProvider,
 		summarizeProvider: summarizeProvider,
 		activeRequests:    sync.Map{},
@@ -370,6 +375,13 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 		}
 	}
 
+	// Only execute tools locally when the provider explicitly signals tool-use
+	// finish. For Claude Code CLI the tools are executed internally by the
+	// subprocess; the finish reason is always EndTurn, so we skip this loop.
+	if assistantMsg.FinishReason() != message.FinishReasonToolUse {
+		return assistantMsg, nil, nil
+	}
+
 	toolResults := make([]message.ToolResult, len(assistantMsg.ToolCalls()))
 	toolCalls := assistantMsg.ToolCalls()
 	for i, toolCall := range toolCalls {
@@ -530,6 +542,25 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		}
 		logging.ErrorPersist(event.Error.Error())
 		return event.Error
+	case provider.EventPermissionRequest:
+		req := event.PermissionRequest
+		if req == nil || a.permissions == nil {
+			return nil
+		}
+		cr, ok := a.provider.(provider.ControlResponder)
+		if !ok {
+			return nil
+		}
+		permCtx := ctx
+		go func() {
+			params := buildPermissionRequest(sessionID, req)
+			allowed := a.permissions.Request(permCtx, params)
+			if err := cr.SendControlResponse(req.RequestID, req.SessionID, allowed); err != nil {
+				logging.Error("failed to send control response", "error", err)
+			}
+		}()
+		return nil
+
 	case provider.EventComplete:
 		// Only replace tool calls if the completion event provides them.
 		// Some providers return an empty ToolCalls slice at completion even
@@ -857,4 +888,58 @@ func createAgentProvider(agentName config.AgentName, extraOpts ...provider.Provi
 	}
 
 	return agentProvider, nil
+}
+
+// buildPermissionRequest converts a Claude Code control_request into a
+// permission.CreatePermissionRequest, populating Params with typed structs
+// so the permission dialog can render diffs/previews.
+func buildPermissionRequest(sessionID string, req *provider.ProviderPermissionRequest) permission.CreatePermissionRequest {
+	inp := req.Input
+	path := req.BlockedPath
+	if path == "" {
+		if fp, ok := inp["file_path"].(string); ok {
+			path = fp
+		}
+	}
+
+	base := permission.CreatePermissionRequest{
+		SessionID:   sessionID,
+		ToolName:    req.ToolName,
+		Action:      "run",
+		Description: req.Description,
+		Path:        path,
+	}
+
+	switch req.ToolName {
+	case "Edit", "MultiEdit":
+		filePath, _ := inp["file_path"].(string)
+		oldStr, _ := inp["old_string"].(string)
+		newStr, _ := inp["new_string"].(string)
+		d, _, _ := diff.GenerateDiff(oldStr, newStr, filePath)
+		base.ToolName = tools.EditToolName
+		base.Params = tools.EditPermissionsParams{FilePath: filePath, Diff: d}
+
+	case "Write", "Create":
+		filePath, _ := inp["file_path"].(string)
+		content, _ := inp["content"].(string)
+		oldContent := ""
+		if data, err := os.ReadFile(filePath); err == nil {
+			oldContent = string(data)
+		}
+		d, _, _ := diff.GenerateDiff(oldContent, content, filePath)
+		base.ToolName = tools.WriteToolName
+		base.Params = tools.WritePermissionsParams{FilePath: filePath, Diff: d}
+
+	case "Bash":
+		command, _ := inp["command"].(string)
+		base.ToolName = tools.BashToolName
+		base.Params = tools.BashPermissionsParams{Command: command}
+
+	case "WebFetch":
+		url, _ := inp["url"].(string)
+		base.ToolName = tools.FetchToolName
+		base.Params = tools.FetchPermissionsParams{URL: url}
+	}
+
+	return base
 }
