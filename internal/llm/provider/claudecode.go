@@ -39,6 +39,9 @@ type claudeEvent struct {
 	Usage         *claudeUsage `json:"usage,omitempty"`
 	IsError       bool         `json:"is_error,omitempty"`
 	Result        string       `json:"result,omitempty"`
+	// control_request fields
+	RequestID string                    `json:"request_id,omitempty"`
+	Request   *claudeControlRequestBody `json:"request,omitempty"`
 }
 
 type streamEvent struct {
@@ -92,11 +95,94 @@ type claudeCodeClient struct {
 	providerOptions providerClientOptions
 	mu              sync.Mutex
 	sessionID       string // Claude Code session ID for --resume
+
+	// stdinCh receives bytes to write to the active process stdin.
+	// Nil when no process is active.
+	stdinCh  chan []byte
+	stdinMu  sync.Mutex
 }
 
 func newClaudeCodeClient(opts providerClientOptions) ClaudeCodeClient {
 	return &claudeCodeClient{
 		providerOptions: opts,
+	}
+}
+
+// claudeControlRequestBody is the "request" field inside a control_request event.
+type claudeControlRequestBody struct {
+	Subtype     string          `json:"subtype"`
+	ToolName    string          `json:"tool_name"`
+	ToolUseID   string          `json:"tool_use_id"`
+	Input       json.RawMessage `json:"input"`
+	BlockedPath string          `json:"blocked_path,omitempty"`
+	Description string          `json:"description,omitempty"`
+}
+
+// claudeControlResponse is sent back to Claude Code via stdin.
+type claudeControlResponse struct {
+	Type      string                    `json:"type"`
+	SessionID string                    `json:"session_id"`
+	Response  *claudeControlResponseBody `json:"response"`
+}
+
+type claudeControlResponseBody struct {
+	Subtype   string                    `json:"subtype"`
+	RequestID string                    `json:"request_id"`
+	Response  *claudeControlResponseData `json:"response,omitempty"`
+	Error     string                    `json:"error,omitempty"`
+}
+
+type claudeControlResponseData struct {
+	Behavior string `json:"behavior"`
+}
+
+// SendControlResponse writes an allow/deny response for a pending control_request
+// back to the Claude Code process via stdin.
+func (c *claudeCodeClient) SendControlResponse(requestID, sessionID string, allow bool) error {
+	var resp claudeControlResponse
+	if allow {
+		resp = claudeControlResponse{
+			Type:      "control_response",
+			SessionID: sessionID,
+			Response: &claudeControlResponseBody{
+				Subtype:   "success",
+				RequestID: requestID,
+				Response:  &claudeControlResponseData{Behavior: "allow"},
+			},
+		}
+	} else {
+		resp = claudeControlResponse{
+			Type:      "control_response",
+			SessionID: sessionID,
+			Response: &claudeControlResponseBody{
+				Subtype:   "error",
+				RequestID: requestID,
+				Error:     "Permission denied",
+			},
+		}
+	}
+
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+
+	// Hold the mutex for the entire nil-check + send to prevent a race where
+	// stream() closes stdinCh between the nil check and the send (sending to a
+	// closed channel panics).
+	c.stdinMu.Lock()
+	defer c.stdinMu.Unlock()
+
+	if c.stdinCh == nil {
+		return fmt.Errorf("no active Claude Code process")
+	}
+
+	select {
+	case c.stdinCh <- data:
+		return nil
+	default:
+		return fmt.Errorf("stdin channel full, response dropped")
 	}
 }
 
@@ -186,6 +272,30 @@ func (c *claudeCodeClient) stream(ctx context.Context, messages []message.Messag
 			return
 		}
 
+		// Create a channel for writing to stdin (user message + control responses).
+		stdinCh := make(chan []byte, 16)
+		c.stdinMu.Lock()
+		c.stdinCh = stdinCh
+		c.stdinMu.Unlock()
+
+		// Goroutine: drains stdinCh → stdin pipe; closes stdin when done.
+		go func() {
+			defer stdin.Close()
+			for {
+				select {
+				case data, ok := <-stdinCh:
+					if !ok {
+						return
+					}
+					if _, err := stdin.Write(data); err != nil {
+						logging.Error("failed to write to claude stdin", "error", err)
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+
 		// Send the user message via stdin (newline-delimited JSON).
 		userMsg := c.extractUserPrompt(messages)
 		inputMsg := map[string]any{
@@ -198,13 +308,18 @@ func (c *claudeCodeClient) stream(ctx context.Context, messages []message.Messag
 		}
 		msgBytes, _ := json.Marshal(inputMsg)
 		msgBytes = append(msgBytes, '\n')
-		if _, err := stdin.Write(msgBytes); err != nil {
-			logging.Error("failed to write to claude stdin", "error", err)
-		}
-		stdin.Close() // Signal end of input
+		stdinCh <- msgBytes
 
 		// Read and process stdout events.
 		c.processStream(ctx, stdout, eventChan)
+
+		// Stream done — clear c.stdinCh under mutex BEFORE closing the local
+		// stdinCh so that SendControlResponse (which holds the same mutex) can
+		// never send to an already-closed channel.
+		c.stdinMu.Lock()
+		c.stdinCh = nil
+		c.stdinMu.Unlock()
+		close(stdinCh)
 
 		// Wait for process to exit.
 		if err := cmd.Wait(); err != nil {
@@ -295,6 +410,25 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 				continue
 			}
 			c.handleToolResults(event.Message, eventChan, activeToolCalls)
+
+		case "control_request":
+			if event.Request != nil && event.Request.Subtype == "can_use_tool" {
+				var inputMap map[string]any
+				if len(event.Request.Input) > 0 {
+					_ = json.Unmarshal(event.Request.Input, &inputMap)
+				}
+				eventChan <- ProviderEvent{
+					Type: EventPermissionRequest,
+					PermissionRequest: &ProviderPermissionRequest{
+						RequestID:   event.RequestID,
+						SessionID:   event.SessionID,
+						ToolName:    event.Request.ToolName,
+						Input:       inputMap,
+						BlockedPath: event.Request.BlockedPath,
+						Description: event.Request.Description,
+					},
+				}
+			}
 
 		case "result":
 			if event.Usage != nil {
