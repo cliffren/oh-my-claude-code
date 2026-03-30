@@ -535,6 +535,9 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 			}
 		}
 		return nil
+	case provider.EventWarning:
+		logging.InfoPersist(event.Content)
+		return nil
 	case provider.EventError:
 		if errors.Is(event.Error, context.Canceled) {
 			logging.InfoPersist(fmt.Sprintf("Event processing canceled for session: %s", sessionID))
@@ -573,22 +576,28 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		if err := a.messages.Update(ctx, *assistantMsg); err != nil {
 			return fmt.Errorf("failed to update message: %w", err)
 		}
-		return a.TrackUsage(ctx, sessionID, a.provider.Model(), event.Response.Usage)
+		return a.TrackUsage(ctx, sessionID, a.provider.Model(), event.Response.Usage, event.Response.TotalCostUSD)
 	}
 
 	return nil
 }
 
-func (a *agent) TrackUsage(ctx context.Context, sessionID string, model models.Model, usage provider.TokenUsage) error {
+func (a *agent) TrackUsage(ctx context.Context, sessionID string, model models.Model, usage provider.TokenUsage, totalCostUSD float64) error {
 	sess, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get session: %w", err)
 	}
 
-	cost := model.CostPer1MInCached/1e6*float64(usage.CacheCreationTokens) +
-		model.CostPer1MOutCached/1e6*float64(usage.CacheReadTokens) +
-		model.CostPer1MIn/1e6*float64(usage.InputTokens) +
-		model.CostPer1MOut/1e6*float64(usage.OutputTokens)
+	var cost float64
+	if totalCostUSD > 0 {
+		// Use the provider-reported exact cost when available (e.g. Claude Code result event).
+		cost = totalCostUSD
+	} else {
+		cost = model.CostPer1MInCached/1e6*float64(usage.CacheCreationTokens) +
+			model.CostPer1MOutCached/1e6*float64(usage.CacheReadTokens) +
+			model.CostPer1MIn/1e6*float64(usage.InputTokens) +
+			model.CostPer1MOut/1e6*float64(usage.OutputTokens)
+	}
 
 	sess.Cost += cost
 	sess.CompletionTokens = usage.OutputTokens + usage.CacheReadTokens

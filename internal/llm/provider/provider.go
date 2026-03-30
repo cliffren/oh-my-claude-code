@@ -57,6 +57,7 @@ type ProviderResponse struct {
 	ToolCalls    []message.ToolCall
 	Usage        TokenUsage
 	FinishReason message.FinishReason
+	TotalCostUSD float64 // non-zero when the provider reports exact cost (e.g. Claude Code result event)
 }
 
 type InitData struct {
