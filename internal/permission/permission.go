@@ -103,7 +103,6 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 
 	s.Publish(pubsub.CreatedEvent, permission)
 
-	// Wait for the response or context cancellation.
 	select {
 	case resp := <-respCh:
 		return resp
