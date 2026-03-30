@@ -411,11 +411,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if payload.Type == agent.AgentEventTypeCompacting {
 			a.isCompacting = !payload.Done
-			if payload.Done {
-				a.compactingMessage = ""
-			} else {
-				a.compactingMessage = "Compacting..."
-			}
+			a.compactingMessage = payload.Progress
 			return a, nil
 		} else if payload.Done && payload.Type == agent.AgentEventTypeSummarize {
 			a.isCompacting = false

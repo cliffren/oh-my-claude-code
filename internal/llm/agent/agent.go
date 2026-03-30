@@ -551,9 +551,14 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		return nil
 	case provider.EventCompacting:
 		done := event.Content != "compacting"
+		progress := "Compacting..."
+		if done {
+			progress = ""
+		}
 		a.Publish(pubsub.CreatedEvent, AgentEvent{
-			Type: AgentEventTypeCompacting,
-			Done: done,
+			Type:     AgentEventTypeCompacting,
+			Done:     done,
+			Progress: progress,
 		})
 		return nil
 	case provider.EventError:
