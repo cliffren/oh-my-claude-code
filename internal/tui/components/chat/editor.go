@@ -88,6 +88,9 @@ func (m *editorCmp) openEditor() tea.Cmd {
 	wd := config.WorkingDirectory()
 
 	parts := strings.Fields(editorCmd)
+	if len(parts) == 0 {
+		return util.ReportError(fmt.Errorf("editor command is empty"))
+	}
 	args := append(parts[1:], wd)
 	c := exec.Command(parts[0], args...) //nolint:gosec
 	if err := c.Start(); err != nil {
@@ -233,8 +236,10 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textarea.SetValue("")
 			return m, util.CmdHandler(ShowSlashCompletionMsg{})
 		}
-		// Handle Up/Down for input history
-		if m.textarea.Focused() && msg.String() == "up" && len(m.inputHistory) > 0 {
+		// Handle Up/Down for input history.
+		// Only intercept Up when the cursor is already on line 0; otherwise let
+		// the textarea move the cursor up within a multi-line draft.
+		if m.textarea.Focused() && msg.String() == "up" && m.textarea.Line() == 0 && len(m.inputHistory) > 0 {
 			if m.historyIdx == -1 {
 				// Entering history mode: stash current draft
 				m.historyDraft = m.textarea.Value()

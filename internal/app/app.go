@@ -77,6 +77,7 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 			app.LSPClients,
 			app.TodoStore,
 		),
+		app.Permissions,
 	)
 	if err != nil {
 		logging.Error("Failed to create coder agent", err)
