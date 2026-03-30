@@ -15,18 +15,35 @@ type EventType string
 const maxRetries = 8
 
 const (
-	EventContentStart  EventType = "content_start"
-	EventToolUseStart  EventType = "tool_use_start"
-	EventToolUseDelta  EventType = "tool_use_delta"
-	EventToolUseStop   EventType = "tool_use_stop"
-	EventContentDelta  EventType = "content_delta"
-	EventThinkingDelta EventType = "thinking_delta"
-	EventContentStop   EventType = "content_stop"
-	EventComplete      EventType = "complete"
-	EventInit          EventType = "init"
-	EventError         EventType = "error"
-	EventWarning       EventType = "warning"
+	EventContentStart     EventType = "content_start"
+	EventToolUseStart     EventType = "tool_use_start"
+	EventToolUseDelta     EventType = "tool_use_delta"
+	EventToolUseStop      EventType = "tool_use_stop"
+	EventContentDelta     EventType = "content_delta"
+	EventThinkingDelta    EventType = "thinking_delta"
+	EventContentStop      EventType = "content_stop"
+	EventComplete         EventType = "complete"
+	EventInit             EventType = "init"
+	EventError            EventType = "error"
+	EventWarning          EventType = "warning"
+	EventPermissionRequest EventType = "permission_request"
 )
+
+// ProviderPermissionRequest carries a permission request from Claude Code CLI.
+type ProviderPermissionRequest struct {
+	RequestID   string
+	SessionID   string
+	ToolName    string
+	Input       map[string]any
+	BlockedPath string
+	Description string
+}
+
+// ControlResponder is implemented by providers that support sending control
+// responses back to the underlying process (e.g. Claude Code CLI stdin).
+type ControlResponder interface {
+	SendControlResponse(requestID, sessionID string, allow bool) error
+}
 
 type TokenUsage struct {
 	InputTokens         int64
@@ -53,12 +70,13 @@ type InitData struct {
 type ProviderEvent struct {
 	Type EventType
 
-	Content  string
-	Thinking string
-	Response *ProviderResponse
-	ToolCall *message.ToolCall
-	InitData *InitData
-	Error    error
+	Content           string
+	Thinking          string
+	Response          *ProviderResponse
+	ToolCall          *message.ToolCall
+	InitData          *InitData
+	Error             error
+	PermissionRequest *ProviderPermissionRequest
 }
 type Provider interface {
 	SendMessages(ctx context.Context, messages []message.Message, tools []tools.BaseTool) (*ProviderResponse, error)
