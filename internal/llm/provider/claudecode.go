@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -470,7 +471,7 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 				}
 				eventChan <- ProviderEvent{
 					Type:  EventError,
-					Error: fmt.Errorf("%s", errMsg),
+					Error: errors.New(errMsg),
 				}
 				return
 			}

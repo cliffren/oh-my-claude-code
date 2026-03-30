@@ -28,6 +28,16 @@ var (
 	ErrSessionBusy      = errors.New("session is currently processing another request")
 )
 
+// Claude Code CLI tool names (PascalCase, distinct from toc's internal lowercase constants).
+const (
+	ccToolEdit      = "Edit"
+	ccToolMultiEdit = "MultiEdit"
+	ccToolWrite     = "Write"
+	ccToolCreate    = "Create"
+	ccToolBash      = "Bash"
+	ccToolWebFetch  = "WebFetch"
+)
+
 type AgentEventType string
 
 const (
@@ -554,10 +564,9 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		if !ok {
 			return nil
 		}
-		permCtx := ctx
 		go func() {
 			params := buildPermissionRequest(sessionID, req)
-			allowed := a.permissions.Request(permCtx, params)
+			allowed := a.permissions.Request(ctx, params)
 			if err := cr.SendControlResponse(req.RequestID, req.SessionID, allowed); err != nil {
 				logging.Error("failed to send control response", "error", err)
 			}
@@ -920,7 +929,7 @@ func buildPermissionRequest(sessionID string, req *provider.ProviderPermissionRe
 	}
 
 	switch req.ToolName {
-	case "Edit", "MultiEdit":
+	case ccToolEdit, ccToolMultiEdit:
 		filePath, _ := inp["file_path"].(string)
 		oldStr, _ := inp["old_string"].(string)
 		newStr, _ := inp["new_string"].(string)
@@ -928,7 +937,7 @@ func buildPermissionRequest(sessionID string, req *provider.ProviderPermissionRe
 		base.ToolName = tools.EditToolName
 		base.Params = tools.EditPermissionsParams{FilePath: filePath, Diff: d}
 
-	case "Write", "Create":
+	case ccToolWrite, ccToolCreate:
 		filePath, _ := inp["file_path"].(string)
 		content, _ := inp["content"].(string)
 		oldContent := ""
@@ -939,12 +948,12 @@ func buildPermissionRequest(sessionID string, req *provider.ProviderPermissionRe
 		base.ToolName = tools.WriteToolName
 		base.Params = tools.WritePermissionsParams{FilePath: filePath, Diff: d}
 
-	case "Bash":
+	case ccToolBash:
 		command, _ := inp["command"].(string)
 		base.ToolName = tools.BashToolName
 		base.Params = tools.BashPermissionsParams{Command: command}
 
-	case "WebFetch":
+	case ccToolWebFetch:
 		url, _ := inp["url"].(string)
 		base.ToolName = tools.FetchToolName
 		base.Params = tools.FetchPermissionsParams{URL: url}

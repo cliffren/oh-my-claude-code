@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"slices"
@@ -89,7 +90,7 @@ func (m *editorCmp) openEditor() tea.Cmd {
 
 	parts := strings.Fields(editorCmd)
 	if len(parts) == 0 {
-		return util.ReportError(fmt.Errorf("editor command is empty"))
+		return util.ReportError(errors.New("editor command is empty"))
 	}
 	args := append(parts[1:], wd)
 	c := exec.Command(parts[0], args...) //nolint:gosec
