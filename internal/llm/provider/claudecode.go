@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -40,6 +39,8 @@ type claudeEvent struct {
 	Usage         *claudeUsage `json:"usage,omitempty"`
 	IsError       bool         `json:"is_error,omitempty"`
 	Result        string       `json:"result,omitempty"`
+	// status fields (only present when type == "system", subtype == "status")
+	Status string `json:"status,omitempty"` // "compacting" or null/""
 	// api_retry fields (only present when type == "system", subtype == "api_retry")
 	Attempt      int    `json:"attempt,omitempty"`
 	MaxRetries   int    `json:"max_retries,omitempty"`
@@ -103,16 +104,31 @@ type claudeUsage struct {
 // ClaudeCodeClient is the public type alias following the project convention.
 type ClaudeCodeClient ProviderClient
 
+// procConn holds a persistent connection to a running claude process.
+// The process stays alive across turns so subsequent messages skip the
+// startup overhead (hook loading, session file reads, etc.).
+type procConn struct {
+	cmd     *exec.Cmd
+	cancel  context.CancelFunc // cancels procCtx, killing the process
+	stdinCh chan []byte
+	scanner *bufio.Scanner
+	done    chan struct{} // closed when the process exits
+}
+
 // claudeCodeClient is the private implementation.
 type claudeCodeClient struct {
 	providerOptions providerClientOptions
 	mu              sync.Mutex
 	sessionID       string // Claude Code session ID for --resume
 
-	// stdinCh receives bytes to write to the active process stdin.
-	// Nil when no process is active.
-	stdinCh  chan []byte
-	stdinMu  sync.Mutex
+	// stdinCh mirrors conn.stdinCh for SendControlResponse.
+	// Protected by stdinMu; nil when no process is active.
+	stdinCh chan []byte
+	stdinMu sync.Mutex
+
+	// conn is the persistent process connection; nil if none is live.
+	connMu sync.Mutex
+	conn   *procConn
 }
 
 func newClaudeCodeClient(opts providerClientOptions) ClaudeCodeClient {
@@ -258,58 +274,143 @@ func (c *claudeCodeClient) buildCommand(ctx context.Context) *exec.Cmd {
 	return cmd
 }
 
-// stream spawns a claude CLI process and maps its stream-json output to
-// ProviderEvent values on the returned channel.
+// spawnConn starts a new claude process and returns a procConn for it.
+// The process runs under its own context so it outlives individual stream calls.
+func (c *claudeCodeClient) spawnConn() (*procConn, error) {
+	procCtx, cancel := context.WithCancel(context.Background())
+	cmd := c.buildCommand(procCtx)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("stdin pipe: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("stdout pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return nil, fmt.Errorf("start claude: %w", err)
+	}
+
+	stdinCh := make(chan []byte, 16)
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
+	done := make(chan struct{})
+
+	// Drain stdinCh → stdin pipe until process context is cancelled.
+	go func() {
+		defer stdin.Close()
+		for {
+			select {
+			case data, ok := <-stdinCh:
+				if !ok {
+					return
+				}
+				if _, err := stdin.Write(data); err != nil {
+					logging.Error("failed to write to claude stdin", "error", err)
+				}
+			case <-procCtx.Done():
+				return
+			}
+		}
+	}()
+
+	conn := &procConn{
+		cmd:     cmd,
+		cancel:  cancel,
+		stdinCh: stdinCh,
+		scanner: scanner,
+		done:    done,
+	}
+
+	// Watch for process exit; clean up shared state when it happens.
+	go func() {
+		defer close(done)
+		if err := cmd.Wait(); err != nil {
+			logging.Debug("claude process exited", "error", err)
+		}
+		c.connMu.Lock()
+		if c.conn == conn {
+			c.conn = nil
+		}
+		c.connMu.Unlock()
+		c.stdinMu.Lock()
+		if c.stdinCh == stdinCh {
+			c.stdinCh = nil
+		}
+		c.stdinMu.Unlock()
+	}()
+
+	// Mirror stdinCh so SendControlResponse can reach the process.
+	c.stdinMu.Lock()
+	c.stdinCh = stdinCh
+	c.stdinMu.Unlock()
+
+	return conn, nil
+}
+
+// getOrCreateConn returns the live connection, spawning a new process if needed.
+func (c *claudeCodeClient) getOrCreateConn() (*procConn, error) {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
+	if c.conn != nil {
+		select {
+		case <-c.conn.done:
+			c.conn = nil // process died unexpectedly
+		default:
+			return c.conn, nil // reuse live process
+		}
+	}
+
+	conn, err := c.spawnConn()
+	if err != nil {
+		return nil, err
+	}
+	c.conn = conn
+	return conn, nil
+}
+
+// killConn cancels the live process and waits for it to exit.
+func (c *claudeCodeClient) killConn() {
+	c.connMu.Lock()
+	conn := c.conn
+	c.conn = nil
+	c.connMu.Unlock()
+
+	if conn == nil {
+		return
+	}
+
+	// Nil out stdinCh BEFORE cancelling so SendControlResponse can't write
+	// to a channel whose receiver goroutine is already shutting down.
+	c.stdinMu.Lock()
+	c.stdinCh = nil
+	c.stdinMu.Unlock()
+
+	conn.cancel()
+	<-conn.done
+}
+
+// stream sends a user message to a persistent claude process and streams
+// the resulting events. The process is kept alive after a successful turn
+// so the next call reuses it without spawning overhead.
 func (c *claudeCodeClient) stream(ctx context.Context, messages []message.Message, tools []toolsPkg.BaseTool) <-chan ProviderEvent {
 	eventChan := make(chan ProviderEvent, 64)
 
 	go func() {
 		defer close(eventChan)
 
-		cmd := c.buildCommand(ctx)
-
-		stdin, err := cmd.StdinPipe()
+		conn, err := c.getOrCreateConn()
 		if err != nil {
-			eventChan <- ProviderEvent{Type: EventError, Error: fmt.Errorf("stdin pipe: %w", err)}
+			eventChan <- ProviderEvent{Type: EventError, Error: err}
 			return
 		}
 
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			eventChan <- ProviderEvent{Type: EventError, Error: fmt.Errorf("stdout pipe: %w", err)}
-			return
-		}
-
-		if err := cmd.Start(); err != nil {
-			eventChan <- ProviderEvent{Type: EventError, Error: fmt.Errorf("start claude: %w", err)}
-			return
-		}
-
-		// Create a channel for writing to stdin (user message + control responses).
-		stdinCh := make(chan []byte, 16)
-		c.stdinMu.Lock()
-		c.stdinCh = stdinCh
-		c.stdinMu.Unlock()
-
-		// Goroutine: drains stdinCh → stdin pipe; closes stdin when done.
-		go func() {
-			defer stdin.Close()
-			for {
-				select {
-				case data, ok := <-stdinCh:
-					if !ok {
-						return
-					}
-					if _, err := stdin.Write(data); err != nil {
-						logging.Error("failed to write to claude stdin", "error", err)
-					}
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
-
-		// Send the user message via stdin (newline-delimited JSON).
+		// Send the user message via stdin.
 		userMsg := c.extractUserPrompt(messages)
 		inputMsg := map[string]any{
 			"type": "user",
@@ -321,22 +422,17 @@ func (c *claudeCodeClient) stream(ctx context.Context, messages []message.Messag
 		}
 		msgBytes, _ := json.Marshal(inputMsg)
 		msgBytes = append(msgBytes, '\n')
-		stdinCh <- msgBytes
+		select {
+		case conn.stdinCh <- msgBytes:
+		case <-ctx.Done():
+			return
+		}
 
-		// Read and process stdout events.
-		c.processStream(ctx, stdout, eventChan)
-
-		// Stream done — clear c.stdinCh under mutex BEFORE closing the local
-		// stdinCh so that SendControlResponse (which holds the same mutex) can
-		// never send to an already-closed channel.
-		c.stdinMu.Lock()
-		c.stdinCh = nil
-		c.stdinMu.Unlock()
-		close(stdinCh)
-
-		// Wait for process to exit.
-		if err := cmd.Wait(); err != nil {
-			logging.Debug("claude process exited", "error", err)
+		// Process events until result or error.
+		// keepAlive is false if the call was cancelled mid-turn.
+		keepAlive := c.processStream(ctx, conn.scanner, eventChan)
+		if !keepAlive {
+			c.killConn()
 		}
 	}()
 
@@ -353,13 +449,11 @@ func (c *claudeCodeClient) extractUserPrompt(messages []message.Message) string 
 	return ""
 }
 
-// processStream reads newline-delimited JSON from stdout and emits
-// ProviderEvent values on eventChan.
-func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, eventChan chan<- ProviderEvent) {
-	scanner := bufio.NewScanner(stdout)
-	// Increase buffer size for large tool outputs (1 MB).
-	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
-
+// processStream reads newline-delimited JSON from scanner and emits
+// ProviderEvent values on eventChan. Returns true if the turn completed
+// normally (result received) so the caller can keep the process alive,
+// or false if the context was cancelled or an error occurred.
+func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Scanner, eventChan chan<- ProviderEvent) bool {
 	var fullContent strings.Builder
 	var totalUsage TokenUsage
 	hadStreamDeltas := false
@@ -370,7 +464,7 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		default:
 		}
 
@@ -409,6 +503,11 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 				eventChan <- ProviderEvent{
 					Type:    EventWarning,
 					Content: msg,
+				}
+			} else if event.Subtype == "status" {
+				eventChan <- ProviderEvent{
+					Type:    EventCompacting,
+					Content: event.Status, // "compacting" = started, "" = done
 				}
 			}
 
@@ -473,7 +572,7 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 					Type:  EventError,
 					Error: errors.New(errMsg),
 				}
-				return
+				return false
 			}
 			eventChan <- ProviderEvent{
 				Type: EventComplete,
@@ -485,8 +584,10 @@ func (c *claudeCodeClient) processStream(ctx context.Context, stdout io.Reader, 
 					TotalCostUSD: event.TotalCostUsd,
 				},
 			}
+			return true
 		}
 	}
+	return false
 }
 
 // handleStreamEvent processes inner stream events from stream_event.event.
