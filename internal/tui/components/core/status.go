@@ -89,6 +89,9 @@ func getHelpWidget() string {
 }
 
 func formatTokensAndCost(tokens, contextWindow int64, cost float64) string {
+	// Format cost with $ symbol and 2 decimal places
+	formattedCost := fmt.Sprintf("$%.2f", cost)
+
 	// Format tokens in human-readable format (e.g., 110K, 1.2M)
 	var formattedTokens string
 	switch {
@@ -107,9 +110,6 @@ func formatTokensAndCost(tokens, contextWindow int64, cost float64) string {
 	if strings.HasSuffix(formattedTokens, ".0M") {
 		formattedTokens = strings.Replace(formattedTokens, ".0M", "M", 1)
 	}
-
-	// Format cost with $ symbol and 2 decimal places
-	formattedCost := fmt.Sprintf("$%.2f", cost)
 
 	percentage := (float64(tokens) / float64(contextWindow)) * 100
 	if percentage > 80 {
@@ -131,11 +131,15 @@ func (m statusCmp) View() string {
 	tokenInfoWidth := 0
 	if m.session.ID != "" {
 		totalTokens := m.session.PromptTokens + m.session.CompletionTokens
-		tokens := formatTokensAndCost(totalTokens, model.ContextWindow, m.session.Cost)
+		contextWindow := model.ContextWindow
+		if m.session.ContextWindow > 0 {
+			contextWindow = m.session.ContextWindow
+		}
+		tokens := formatTokensAndCost(totalTokens, contextWindow, m.session.Cost)
 		tokensStyle := styles.Padded().
 			Background(t.Text()).
 			Foreground(t.BackgroundSecondary())
-		percentage := (float64(totalTokens) / float64(model.ContextWindow)) * 100
+		percentage := (float64(totalTokens) / float64(contextWindow)) * 100
 		if percentage > 80 {
 			tokensStyle = tokensStyle.Background(t.Warning())
 		}

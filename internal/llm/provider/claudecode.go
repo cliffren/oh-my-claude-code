@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -35,10 +36,11 @@ type claudeEvent struct {
 	// Result fields (only present when type == "result")
 	DurationMs    int64        `json:"duration_ms,omitempty"`
 	DurationApiMs int64        `json:"duration_api_ms,omitempty"`
-	TotalCostUsd  float64      `json:"total_cost_usd,omitempty"`
-	Usage         *claudeUsage `json:"usage,omitempty"`
-	IsError       bool         `json:"is_error,omitempty"`
-	Result        string       `json:"result,omitempty"`
+	TotalCostUsd  float64                       `json:"total_cost_usd,omitempty"`
+	Usage         *claudeUsage                 `json:"usage,omitempty"`
+	ModelUsage    map[string]claudeModelUsage  `json:"modelUsage,omitempty"`
+	IsError       bool                         `json:"is_error,omitempty"`
+	Result        string                       `json:"result,omitempty"`
 	// status fields (only present when type == "system", subtype == "status")
 	Status string `json:"status,omitempty"` // "compacting" or null/""
 	// api_retry fields (only present when type == "system", subtype == "api_retry")
@@ -74,6 +76,7 @@ type claudeMessage struct {
 	Role    string          `json:"role"`
 	Content json.RawMessage `json:"content"` // string or array of content blocks
 	Model   string          `json:"model,omitempty"`
+	Usage   *claudeUsage    `json:"usage,omitempty"`
 }
 
 type claudeContentBlock struct {
@@ -95,6 +98,11 @@ type claudeUsage struct {
 	OutputTokens             int64 `json:"output_tokens"`
 	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens,omitempty"`
 	CacheReadInputTokens     int64 `json:"cache_read_input_tokens,omitempty"`
+}
+
+type claudeModelUsage struct {
+	ContextWindow  int64 `json:"contextWindow,omitempty"`
+	MaxOutputTokens int64 `json:"maxOutputTokens,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +134,10 @@ type claudeCodeClient struct {
 	stdinCh chan []byte
 	stdinMu sync.Mutex
 
+	// pendingInputs stores the raw tool input for each pending control_request
+	// so SendControlResponse can echo it back as updatedInput.
+	pendingInputs sync.Map // requestID → json.RawMessage
+
 	// conn is the persistent process connection; nil if none is live.
 	connMu sync.Mutex
 	conn   *procConn
@@ -134,6 +146,36 @@ type claudeCodeClient struct {
 func newClaudeCodeClient(opts providerClientOptions) ClaudeCodeClient {
 	return &claudeCodeClient{
 		providerOptions: opts,
+	}
+}
+
+// Close implements ProviderCloser. It kills the persistent CLI process.
+func (c *claudeCodeClient) Close() {
+	c.killConn()
+}
+
+// SetResumeSessionID implements SessionResumer. It pre-seeds the session ID
+// so the next spawned process receives --resume and continues the prior session.
+func (c *claudeCodeClient) SetResumeSessionID(id string) {
+	c.mu.Lock()
+	c.sessionID = id
+	c.mu.Unlock()
+}
+
+// DeleteClaudeSession removes the session file for the given Claude Code
+// session ID from the ~/.claude/projects/ directory tree.
+func DeleteClaudeSession(claudeSessionID string) {
+	if claudeSessionID == "" {
+		return
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	pattern := filepath.Join(homeDir, ".claude", "projects", "*", claudeSessionID+".jsonl")
+	matches, _ := filepath.Glob(pattern)
+	for _, m := range matches {
+		_ = os.Remove(m)
 	}
 }
 
@@ -162,12 +204,19 @@ type claudeControlResponseBody struct {
 }
 
 type claudeControlResponseData struct {
-	Behavior string `json:"behavior"`
+	Behavior     string          `json:"behavior"`
+	UpdatedInput json.RawMessage `json:"updatedInput,omitempty"`
 }
 
 // SendControlResponse writes an allow/deny response for a pending control_request
 // back to the Claude Code process via stdin.
 func (c *claudeCodeClient) SendControlResponse(requestID, sessionID string, allow bool) error {
+	// Retrieve and remove the stored tool input for this request.
+	var rawInput json.RawMessage
+	if v, ok := c.pendingInputs.LoadAndDelete(requestID); ok {
+		rawInput = v.(json.RawMessage)
+	}
+
 	var resp claudeControlResponse
 	if allow {
 		resp = claudeControlResponse{
@@ -176,7 +225,7 @@ func (c *claudeCodeClient) SendControlResponse(requestID, sessionID string, allo
 			Response: &claudeControlResponseBody{
 				Subtype:   "success",
 				RequestID: requestID,
-				Response:  &claudeControlResponseData{Behavior: "allow"},
+				Response:  &claudeControlResponseData{Behavior: "allow", UpdatedInput: rawInput},
 			},
 		}
 	} else {
@@ -218,20 +267,24 @@ func (c *claudeCodeClient) SendControlResponse(requestID, sessionID string, allo
 // buildCommand constructs the exec.Cmd for the claude CLI process.
 func (c *claudeCodeClient) buildCommand(ctx context.Context) *exec.Cmd {
 	args := []string{
-		"--print",
 		"--output-format", "stream-json",
 		"--input-format", "stream-json",
 		"--verbose",
 		"--max-turns", "0", // unlimited turns
 		"--model", string(c.providerOptions.model.APIModel),
+		// Route tool permission prompts through stdin/stdout control protocol
+		// so toc can show its own permission dialog. Without this flag the CLI
+		// either auto-approves or silently denies tools.
+		"--permission-prompt-tool", "stdio",
 	}
 
 	if c.providerOptions.reasoningEffort != "" && c.providerOptions.model.CanReason {
 		args = append(args, "--effort", c.providerOptions.reasoningEffort)
 	}
 
-	if c.providerOptions.permissionMode != "" && c.providerOptions.permissionMode != "default" {
-		args = append(args, "--permission-mode", c.providerOptions.permissionMode)
+	permMode := c.providerOptions.permissionMode
+	if permMode != "" && permMode != "default" {
+		args = append(args, "--permission-mode", permMode)
 	}
 
 	if c.providerOptions.systemMessage != "" {
@@ -457,6 +510,9 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 	var fullContent strings.Builder
 	var totalUsage TokenUsage
 	hadStreamDeltas := false
+	// Track the latest API call's actual context window utilization
+	// (from assistant message usage, not the cumulative result usage).
+	var lastContextTokens int64
 
 	// Track active tool calls for proper start/stop events.
 	activeToolCalls := make(map[string]bool)
@@ -495,6 +551,7 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 						Model:          event.Model,
 						PermissionMode: event.PermissionModeStr,
 						Version:        event.ClaudeCodeVersion,
+						SessionID:      event.SessionID,
 					},
 				}
 			} else if event.Subtype == "api_retry" {
@@ -522,6 +579,11 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 			if event.Message == nil {
 				continue
 			}
+			// Track the latest API call's context window utilization.
+			if event.Message.Usage != nil {
+				u := event.Message.Usage
+				lastContextTokens = u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+			}
 			c.handleAssistantMessage(event.Message, eventChan, activeToolCalls, &fullContent, hadStreamDeltas)
 
 		case "user":
@@ -535,6 +597,10 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 				var inputMap map[string]any
 				if len(event.Request.Input) > 0 {
 					_ = json.Unmarshal(event.Request.Input, &inputMap)
+				}
+				// Store raw input so SendControlResponse can echo it as updatedInput.
+				if event.RequestID != "" && len(event.Request.Input) > 0 {
+					c.pendingInputs.Store(event.RequestID, event.Request.Input)
 				}
 				eventChan <- ProviderEvent{
 					Type: EventPermissionRequest,
@@ -556,6 +622,14 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 					OutputTokens:        event.Usage.OutputTokens,
 					CacheCreationTokens: event.Usage.CacheCreationInputTokens,
 					CacheReadTokens:     event.Usage.CacheReadInputTokens,
+					ContextTokens:       lastContextTokens,
+				}
+			}
+			// Extract the real context window from modelUsage (varies by plan).
+			for _, mu := range event.ModelUsage {
+				if mu.ContextWindow > 0 {
+					totalUsage.ContextWindow = mu.ContextWindow
+					break
 				}
 			}
 			if event.SessionID != "" {
@@ -633,10 +707,16 @@ func (c *claudeCodeClient) handleAssistantMessage(msg *claudeMessage, eventChan 
 		// Only emit text from assistant messages if no stream_event deltas
 		// were received for this turn, to avoid double-counting.
 		if block.Type == "text" && block.Text != "" && !hadStreamDeltas {
-			fullContent.WriteString(block.Text)
+			text := block.Text
+			// Separate text from different internal turns with a newline
+			// so they don't run together in the chat display.
+			if fullContent.Len() > 0 && !strings.HasSuffix(fullContent.String(), "\n") {
+				text = "\n" + text
+			}
+			fullContent.WriteString(text)
 			eventChan <- ProviderEvent{
 				Type:    EventContentDelta,
-				Content: block.Text,
+				Content: text,
 			}
 		}
 		if block.Type == "thinking" && block.Thinking != "" {

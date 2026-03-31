@@ -17,6 +17,8 @@ type Session struct {
 	PromptTokens     int64
 	CompletionTokens int64
 	SummaryMessageID string
+	ClaudeSessionID  string // Claude Code CLI session ID for --resume
+	ContextWindow    int64  // actual context window reported by provider (0 = use model default)
 	Cost             float64
 	CreatedAt        int64
 	UpdatedAt        int64
@@ -110,6 +112,10 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 			String: session.SummaryMessageID,
 			Valid:  session.SummaryMessageID != "",
 		},
+		ClaudeSessionID: sql.NullString{
+			String: session.ClaudeSessionID,
+			Valid:  session.ClaudeSessionID != "",
+		},
 		Cost: session.Cost,
 	})
 	if err != nil {
@@ -141,6 +147,7 @@ func (s service) fromDBItem(item db.Session) Session {
 		PromptTokens:     item.PromptTokens,
 		CompletionTokens: item.CompletionTokens,
 		SummaryMessageID: item.SummaryMessageID.String,
+		ClaudeSessionID:  item.ClaudeSessionID.String,
 		Cost:             item.Cost,
 		CreatedAt:        item.CreatedAt,
 		UpdatedAt:        item.UpdatedAt,

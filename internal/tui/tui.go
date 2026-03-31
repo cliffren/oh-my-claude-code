@@ -581,6 +581,10 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case dialog.SessionDeleteMsg:
+		// Clean up the bound Claude Code session file before removing from DB.
+		if sess, err := a.app.Sessions.Get(context.Background(), msg.SessionID); err == nil {
+			provider.DeleteClaudeSession(sess.ClaudeSessionID)
+		}
 		err := a.app.Sessions.Delete(context.Background(), msg.SessionID)
 		if err != nil {
 			return a, util.ReportError(err)
