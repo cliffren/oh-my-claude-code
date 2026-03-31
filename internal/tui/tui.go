@@ -170,6 +170,9 @@ type appModel struct {
 	showPermissionModeDialog bool
 	permissionModeDialog     dialog.PermissionModeDialog
 
+	showDiffViewer bool
+	diffViewer     dialog.DiffViewer
+
 	showInitDialog bool
 	initDialog     dialog.InitDialogCmp
 
@@ -257,6 +260,10 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		prm, permCmd := a.permissions.Update(msg)
 		a.permissions = prm.(dialog.PermissionDialogCmp)
 		cmds = append(cmds, permCmd)
+
+		dv, dvCmd := a.diffViewer.Update(msg)
+		a.diffViewer = dv.(dialog.DiffViewer)
+		cmds = append(cmds, dvCmd)
 
 		help, helpCmd := a.help.Update(msg)
 		a.help = help.(dialog.HelpCmp)
@@ -426,9 +433,18 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if (tokens >= int64(float64(contextWindow)*0.95)) && config.Get().AutoCompact {
 					return a, util.CmdHandler(startCompactSessionMsg{})
 				}
+			} else {
+				return a, util.CmdHandler(chat.ReloadModifiedFilesMsg{})
 			}
 		}
 		// Continue listening for events
+		return a, nil
+
+	case dialog.ShowDiffMsg:
+		a.showDiffViewer = true
+		return a, a.diffViewer.SetDiff(msg.FilePath)
+	case dialog.CloseDiffViewerMsg:
+		a.showDiffViewer = false
 		return a, nil
 
 	case dialog.CloseThemeDialogMsg:
@@ -843,6 +859,14 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Batch(cmds...)
 		}
 	}
+	if a.showDiffViewer {
+		d, diffCmd := a.diffViewer.Update(msg)
+		a.diffViewer = d.(dialog.DiffViewer)
+		cmds = append(cmds, diffCmd)
+		if _, ok := msg.(tea.KeyMsg); ok {
+			return a, tea.Batch(cmds...)
+		}
+	}
 
 	if a.showSessionDialog {
 		d, sessionCmd := a.sessionDialog.Update(msg)
@@ -976,6 +1000,15 @@ func (a appModel) View() string {
 			appView,
 			true,
 		)
+	}
+
+	if a.showDiffViewer {
+		overlay := a.diffViewer.View()
+		row := lipgloss.Height(appView) / 2
+		row -= lipgloss.Height(overlay) / 2
+		col := lipgloss.Width(appView) / 2
+		col -= lipgloss.Width(overlay) / 2
+		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
 	}
 
 	if a.showFilepicker {
@@ -1223,6 +1256,7 @@ func New(app *app.App, opts ...Option) tea.Model {
 		modelDialog:   dialog.NewModelDialogCmp(),
 		effortDialog:         dialog.NewEffortDialogCmp(),
 		permissionModeDialog: dialog.NewPermissionModeDialog(),
+		diffViewer:           dialog.NewDiffViewer(),
 		permissions:          dialog.NewPermissionDialogCmp(),
 		initDialog:    dialog.NewInitDialogCmp(),
 		themeDialog:   dialog.NewThemeDialogCmp(),

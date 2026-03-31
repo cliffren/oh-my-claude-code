@@ -3,7 +3,9 @@ package chat
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -23,6 +25,16 @@ import (
 	"github.com/cliffren/toc/internal/tui/util"
 )
 
+// ReloadModifiedFilesMsg tells the sidebar to reload modified files from git.
+type ReloadModifiedFilesMsg struct{}
+
+type gitModFilesLoadedMsg struct {
+	files map[string]struct {
+		additions int
+		removals  int
+	}
+}
+
 type sidebarCmp struct {
 	width, height int
 	viewport      viewport.Model
@@ -31,10 +43,11 @@ type sidebarCmp struct {
 	todoStore     *tools.TodoStore
 	selection     selectionController
 	clipboard     clipboardWriter
-	modFiles      map[string]struct {
+	modFiles map[string]struct {
 		additions int
 		removals  int
 	}
+	modFileLines map[int]string // viewport line → file path for click detection
 	filesCh <-chan pubsub.Event[history.File]
 	todoCh  <-chan pubsub.Event[tools.TodoEvent]
 }
@@ -83,6 +96,12 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			return m, tea.Batch(cmds...)
 		}
+		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft && m.modFileLines != nil {
+			lineIdx := m.viewport.YOffset + msg.Y
+			if filePath, ok := m.modFileLines[lineIdx]; ok {
+				return m, util.CmdHandler(dialog.ShowDiffMsg{FilePath: filePath})
+			}
+		}
 		_, _, copied, err := m.selection.handleMouse(msg, m.selectionRegion(), m.visiblePlainLines(), m.clipboard)
 		if err != nil {
 			cmds = append(cmds, util.ReportError(err))
@@ -111,6 +130,12 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.rebuildViewport()
 			}
 		}
+	case ReloadModifiedFilesMsg:
+		return m, loadModifiedFilesFromGitCmd()
+	case gitModFilesLoadedMsg:
+		m.modFiles = msg.files
+		m.rebuildViewport()
+		return m, nil
 	case pubsub.Event[history.File]:
 		if msg.Payload.SessionID == m.session.ID {
 			ctx := context.Background()
@@ -141,7 +166,26 @@ func (m *sidebarCmp) rebuildViewport() {
 		parts = append(parts, todoSection, " ")
 	}
 
+	// Count lines before modified files section for click map.
+	preLines := 0
+	for _, p := range parts {
+		preLines += strings.Count(p, "\n") + 1
+	}
+
 	parts = append(parts, m.modifiedFiles())
+
+	// Build line→file click map.
+	m.modFileLines = make(map[int]string)
+	if len(m.modFiles) > 0 {
+		var paths []string
+		for p := range m.modFiles {
+			paths = append(paths, p)
+		}
+		sort.Strings(paths)
+		for i, p := range paths {
+			m.modFileLines[preLines+1+i] = p // +1 for "Modified Files:" header
+		}
+	}
 
 	content := lipgloss.JoinVertical(lipgloss.Top, parts...)
 	m.viewport.SetContent(content)
@@ -345,11 +389,19 @@ func (m *sidebarCmp) modifiedFiles() string {
 }
 
 func (m *sidebarCmp) SetSize(width, height int) tea.Cmd {
+	if m.width == width && m.height == height {
+		return nil
+	}
+	widthChanged := m.width != width
 	m.width = width
 	m.height = height
 	m.viewport.Width = width
 	m.viewport.Height = height
-	m.rebuildViewport()
+	// Sidebar content depends on width (text wrapping, column layout).
+	// Height-only changes just adjust the visible viewport window.
+	if widthChanged {
+		m.rebuildViewport()
+	}
 	return nil
 }
 
@@ -518,6 +570,40 @@ func (m *sidebarCmp) findInitialVersion(ctx context.Context, path string) (histo
 	}
 
 	return history.File{}, fmt.Errorf("initial version not found")
+}
+
+func loadModifiedFilesFromGitCmd() tea.Cmd {
+	workingDir := config.WorkingDirectory()
+	return func() tea.Msg {
+		cmd := exec.Command("git", "diff", "--numstat")
+		cmd.Dir = workingDir
+		out, err := cmd.Output()
+		if err != nil {
+			return gitModFilesLoadedMsg{}
+		}
+		files := make(map[string]struct {
+			additions int
+			removals  int
+		})
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line == "" {
+				continue
+			}
+			parts := strings.SplitN(line, "\t", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			adds, _ := strconv.Atoi(parts[0])
+			dels, _ := strconv.Atoi(parts[1])
+			if adds > 0 || dels > 0 {
+				files[parts[2]] = struct {
+					additions int
+					removals  int
+				}{additions: adds, removals: dels}
+			}
+		}
+		return gitModFilesLoadedMsg{files: files}
+	}
 }
 
 // Helper function to get the display path for a file

@@ -49,6 +49,8 @@ type permissionsMapping struct {
 	AllowSession key.Binding
 	Deny         key.Binding
 	Tab          key.Binding
+	ScrollUp     key.Binding
+	ScrollDown   key.Binding
 }
 
 var permissionsKeys = permissionsMapping{
@@ -79,6 +81,14 @@ var permissionsKeys = permissionsMapping{
 	Tab: key.NewBinding(
 		key.WithKeys("tab"),
 		key.WithHelp("tab", "switch options"),
+	),
+	ScrollUp: key.NewBinding(
+		key.WithKeys("k", "up"),
+		key.WithHelp("k/↑", "scroll up"),
+	),
+	ScrollDown: key.NewBinding(
+		key.WithKeys("j", "down"),
+		key.WithHelp("j/↓", "scroll down"),
 	),
 }
 
@@ -147,6 +157,10 @@ func (p *permissionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionAllowForSession, Permission: p.permission})
 		case key.Matches(msg, permissionsKeys.Deny):
 			return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionDeny, Permission: p.permission})
+		case key.Matches(msg, permissionsKeys.ScrollUp):
+			p.contentViewPort.LineUp(1)
+		case key.Matches(msg, permissionsKeys.ScrollDown):
+			p.contentViewPort.LineDown(1)
 		default:
 			// Pass other keys to viewport
 			viewPort, cmd := p.contentViewPort.Update(msg)
