@@ -389,11 +389,19 @@ func (m *sidebarCmp) modifiedFiles() string {
 }
 
 func (m *sidebarCmp) SetSize(width, height int) tea.Cmd {
+	if m.width == width && m.height == height {
+		return nil
+	}
+	widthChanged := m.width != width
 	m.width = width
 	m.height = height
 	m.viewport.Width = width
 	m.viewport.Height = height
-	m.rebuildViewport()
+	// Sidebar content depends on width (text wrapping, column layout).
+	// Height-only changes just adjust the visible viewport window.
+	if widthChanged {
+		m.rebuildViewport()
+	}
 	return nil
 }
 

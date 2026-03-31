@@ -30,6 +30,13 @@ type container struct {
 	borderBottom bool
 	borderLeft   bool
 	borderStyle  lipgloss.Border
+
+	// Cached style — rebuilt only when size or theme colors change.
+	cachedStyle  lipgloss.Style
+	cachedW      int
+	cachedH      int
+	cachedBg     lipgloss.AdaptiveColor
+	cachedBorder lipgloss.AdaptiveColor
 }
 
 func (c *container) Init() tea.Cmd {
@@ -49,17 +56,16 @@ func (c *container) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return c, cmd
 }
 
-func (c *container) View() string {
+func (c *container) buildStyle() {
 	t := theme.CurrentTheme()
-	style := lipgloss.NewStyle()
+	bg := t.Background()
+	border := t.BorderNormal()
 	width := c.width
 	height := c.height
 
-	style = style.Background(t.Background())
+	style := lipgloss.NewStyle().Background(bg)
 
-	// Apply border if any side is enabled
 	if c.borderTop || c.borderRight || c.borderBottom || c.borderLeft {
-		// Adjust width and height for borders
 		if c.borderTop {
 			height--
 		}
@@ -73,7 +79,7 @@ func (c *container) View() string {
 			width--
 		}
 		style = style.Border(c.borderStyle, c.borderTop, c.borderRight, c.borderBottom, c.borderLeft)
-		style = style.BorderBackground(t.Background()).BorderForeground(t.BorderNormal())
+		style = style.BorderBackground(bg).BorderForeground(border)
 	}
 	style = style.
 		Width(width).
@@ -83,7 +89,23 @@ func (c *container) View() string {
 		PaddingBottom(c.paddingBottom).
 		PaddingLeft(c.paddingLeft)
 
-	return style.Render(c.content.View())
+	c.cachedStyle = style
+	c.cachedW = c.width
+	c.cachedH = c.height
+	c.cachedBg = bg
+	c.cachedBorder = border
+}
+
+func (c *container) View() string {
+	t := theme.CurrentTheme()
+	bg := t.Background()
+	border := t.BorderNormal()
+	// Rebuild style only when dimensions or theme colors have changed.
+	if c.cachedW != c.width || c.cachedH != c.height ||
+		c.cachedBg != bg || c.cachedBorder != border {
+		c.buildStyle()
+	}
+	return c.cachedStyle.Render(c.content.View())
 }
 
 func (c *container) SetSize(width, height int) tea.Cmd {

@@ -32,6 +32,18 @@ type splitPaneLayout struct {
 	rightPanel  Container
 	leftPanel   Container
 	bottomPanel Container
+
+	// Cached divider string — rebuilt only when height or theme colors change.
+	cachedDivider   string
+	cachedDividerH  int
+	cachedDividerFg lipgloss.AdaptiveColor
+	cachedDividerBg lipgloss.AdaptiveColor
+
+	// Cached outer background style — rebuilt only when size or theme changes.
+	cachedOuterStyle lipgloss.Style
+	cachedOuterW     int
+	cachedOuterH     int
+	cachedOuterBg    lipgloss.AdaptiveColor
 }
 
 type SplitPaneOption func(*splitPaneLayout)
@@ -192,13 +204,17 @@ func (s *splitPaneLayout) View() string {
 
 	if finalView != "" {
 		t := theme.CurrentTheme()
-
-		style := lipgloss.NewStyle().
-			Width(s.width).
-			Height(s.height).
-			Background(t.Background())
-
-		return style.Render(finalView)
+		bg := t.Background()
+		if s.cachedOuterW != s.width || s.cachedOuterH != s.height || s.cachedOuterBg != bg {
+			s.cachedOuterStyle = lipgloss.NewStyle().
+				Width(s.width).
+				Height(s.height).
+				Background(bg)
+			s.cachedOuterW = s.width
+			s.cachedOuterH = s.height
+			s.cachedOuterBg = bg
+		}
+		return s.cachedOuterStyle.Render(finalView)
 	}
 
 	return finalView
@@ -206,15 +222,22 @@ func (s *splitPaneLayout) View() string {
 
 func (s *splitPaneLayout) verticalDivider(height int) string {
 	t := theme.CurrentTheme()
-	line := lipgloss.NewStyle().
-		Foreground(t.BorderNormal()).
-		Background(t.Background()).
-		Render("│")
+	fg := t.BorderNormal()
+	bg := t.Background()
+	if s.cachedDivider != "" && s.cachedDividerH == height &&
+		s.cachedDividerFg == fg && s.cachedDividerBg == bg {
+		return s.cachedDivider
+	}
+	line := lipgloss.NewStyle().Foreground(fg).Background(bg).Render("│")
 	lines := make([]string, height)
 	for i := range lines {
 		lines[i] = line
 	}
-	return strings.Join(lines, "\n")
+	s.cachedDivider = strings.Join(lines, "\n")
+	s.cachedDividerH = height
+	s.cachedDividerFg = fg
+	s.cachedDividerBg = bg
+	return s.cachedDivider
 }
 
 func (s *splitPaneLayout) SetSize(width, height int) tea.Cmd {

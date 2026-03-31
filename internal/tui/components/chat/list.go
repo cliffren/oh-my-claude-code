@@ -509,13 +509,19 @@ func (m *messagesCmp) SetSize(width, height int) tea.Cmd {
 	if m.width == width && m.height == height {
 		return nil
 	}
+	widthChanged := m.width != width
 	m.width = width
 	m.height = height
 	m.viewport.Width = max(0, width-1)
 	m.viewport.Height = height - 2
 	m.attachments.Width = width + 40
 	m.attachments.Height = 3
-	m.rerender()
+	// Message rendering depends only on width (text wrapping).
+	// A height-only change merely adjusts the viewport window — no content
+	// re-render needed, which avoids an O(n) cache wipe on every resize.
+	if widthChanged {
+		m.rerender()
+	}
 	return nil
 }
 
