@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
@@ -605,8 +606,10 @@ func applyHighlighting(content string, segments []Segment, segmentType LineType,
 		if _, exists := ansiSequences[visibleIdx]; !exists {
 			ansiSequences[visibleIdx] = lastAnsiSeq
 		}
-		visibleIdx++
-		i++
+		// Advance by full rune width (handles multi-byte UTF-8 like Chinese)
+		_, runeSize := utf8.DecodeRuneInString(content[i:])
+		visibleIdx += runeSize
+		i += runeSize
 	}
 
 	// Apply highlighting
@@ -645,8 +648,9 @@ func applyHighlighting(content string, segments []Segment, segmentType LineType,
 			}
 		}
 
-		// Get current character
-		char := string(content[i])
+		// Get current character (full rune, not single byte)
+		runeVal, runeSize := utf8.DecodeRuneInString(content[i:])
+		char := string(runeVal)
 
 		if inSelection {
 			// Get the current styling
@@ -670,8 +674,8 @@ func applyHighlighting(content string, segments []Segment, segmentType LineType,
 			sb.WriteString(char)
 		}
 
-		currentPos++
-		i++
+		currentPos += runeSize
+		i += runeSize
 	}
 
 	return sb.String()
