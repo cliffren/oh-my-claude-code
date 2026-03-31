@@ -6,8 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/ncruces/go-sqlite3/driver"
-	_ "github.com/ncruces/go-sqlite3/embed"
+	_ "modernc.org/sqlite"
 
 	"github.com/cliffren/toc/internal/config"
 	"github.com/cliffren/toc/internal/logging"
@@ -25,7 +24,7 @@ func Connect() (*sql.DB, error) {
 	}
 	dbPath := filepath.Join(dataDir, "opencode.db")
 	// Open the SQLite database
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
