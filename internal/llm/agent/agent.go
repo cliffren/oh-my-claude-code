@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -176,11 +178,13 @@ func (a *agent) IsSessionBusy(sessionID string) bool {
 	return busy
 }
 
-func (a *agent) generateTitle(ctx context.Context, sessionID string, content string) error {
-	if content == "" {
+// generateTitle generates a session title after the first assistant response completes.
+// assistantMsg is the final assistant message from the first turn.
+func (a *agent) generateTitle(ctx context.Context, sessionID, userContent string, assistantMsg message.Message) error {
+	if userContent == "" {
 		return nil
 	}
-	session, err := a.sessions.Get(ctx, sessionID)
+	sess, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return err
 	}
@@ -188,31 +192,38 @@ func (a *agent) generateTitle(ctx context.Context, sessionID string, content str
 	var title string
 
 	if a.titleProvider != nil {
+		// LLM-based title generation: give it both sides of the first exchange
+		// for much better accuracy than user message alone.
+		input := fmt.Sprintf("User: %s", userContent)
+		if assistantText := strings.TrimSpace(assistantMsg.Content().String()); assistantText != "" {
+			const maxAssistantLen = 300
+			runes := []rune(assistantText)
+			if len(runes) > maxAssistantLen {
+				assistantText = string(runes[:maxAssistantLen])
+			}
+			input = fmt.Sprintf("User: %s\nAssistant: %s", userContent, assistantText)
+		}
 		ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
-		parts := []message.ContentPart{message.TextContent{Text: content}}
 		response, err := a.titleProvider.SendMessages(
 			ctx,
-			[]message.Message{
-				{
-					Role:  message.User,
-					Parts: parts,
-				},
-			},
+			[]message.Message{{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: input}}}},
 			make([]tools.BaseTool, 0),
 		)
 		if err == nil && response.Content != "" {
 			title = strings.TrimSpace(strings.ReplaceAll(response.Content, "\n", " "))
 		}
+	} else {
+		// Claude Code backend: the title LLM isn't available.
+		// Try to extract a meaningful title from the assistant's response or tool calls.
+		title = extractTitleHeuristic(assistantMsg)
 	}
 
-	// Fallback: use the user's message as the title if the provider
-	// returned nothing or an overly long response (e.g. Claude Code CLI
-	// doesn't honour the title system prompt properly).
+	// Fallback: use the user's message as the title.
 	if title == "" || len([]rune(title)) > 80 {
-		title = strings.TrimSpace(strings.ReplaceAll(content, "\n", " "))
+		title = strings.TrimSpace(strings.ReplaceAll(userContent, "\n", " "))
 	}
 
-	// Hard cap at 50 characters
+	// Hard cap at 50 characters.
 	runes := []rune(title)
 	if len(runes) > 50 {
 		title = string(runes[:47]) + "..."
@@ -222,9 +233,70 @@ func (a *agent) generateTitle(ctx context.Context, sessionID string, content str
 		return nil
 	}
 
-	session.Title = title
-	_, err = a.sessions.Save(ctx, session)
+	sess.Title = title
+	_, err = a.sessions.Save(ctx, sess)
 	return err
+}
+
+// extractTitleHeuristic builds a title from an assistant message without an LLM call.
+// Used for Claude Code backend where the title provider is unavailable.
+func extractTitleHeuristic(msg message.Message) string {
+	// Prefer the assistant's text response — it usually summarises what was done.
+	if text := strings.TrimSpace(msg.Content().String()); text != "" {
+		// Take up to the first sentence or line ending within 80 runes.
+		end := strings.IndexAny(text, ".\n")
+		if end > 0 && end <= 80 {
+			return strings.TrimSpace(text[:end])
+		}
+		// No clean sentence boundary — return empty so the caller falls back
+		// to the user message rather than using an arbitrary text slice.
+		return ""
+	}
+
+	// No text content — derive title from tool calls (file edits).
+	var files []string
+	seen := make(map[string]bool)
+	addFile := func(path string) {
+		if path == "" {
+			return
+		}
+		base := filepath.Base(path)
+		if !seen[base] {
+			seen[base] = true
+			files = append(files, base)
+		}
+	}
+	for _, tc := range msg.ToolCalls() {
+		switch tc.Name {
+		case ccToolEdit, ccToolWrite, ccToolCreate:
+			var p struct {
+				FilePath string `json:"file_path"`
+			}
+			if json.Unmarshal([]byte(tc.Input), &p) == nil {
+				addFile(p.FilePath)
+			}
+		case ccToolMultiEdit:
+			// MultiEdit has an edits array, each entry with a file_path.
+			var p struct {
+				Edits []struct {
+					FilePath string `json:"file_path"`
+				} `json:"edits"`
+			}
+			if json.Unmarshal([]byte(tc.Input), &p) == nil {
+				for _, e := range p.Edits {
+					addFile(e.FilePath)
+				}
+			}
+		}
+	}
+	if len(files) > 0 {
+		if len(files) > 3 {
+			return fmt.Sprintf("Edit: %s (+%d)", strings.Join(files[:3], ", "), len(files)-3)
+		}
+		return "Edit: " + strings.Join(files, ", ")
+	}
+
+	return ""
 }
 
 func (a *agent) err(err error) AgentEvent {
@@ -271,22 +343,12 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 
 func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
 	cfg := config.Get()
-	// List existing messages; if none, start title generation asynchronously.
 	msgs, err := a.messages.List(ctx, sessionID)
 	if err != nil {
 		return a.err(fmt.Errorf("failed to list messages: %w", err))
 	}
-	if len(msgs) == 0 {
-		go func() {
-			defer logging.RecoverPanic("agent.Run", func() {
-				logging.ErrorPersist("panic while generating title")
-			})
-			titleErr := a.generateTitle(context.Background(), sessionID, content)
-			if titleErr != nil {
-				logging.ErrorPersist(fmt.Sprintf("failed to generate title: %v", titleErr))
-			}
-		}()
-	}
+	// Remember if this is the first turn; title is generated after the response completes.
+	isFirstTurn := len(msgs) == 0
 	session, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return a.err(fmt.Errorf("failed to get session: %w", err))
@@ -340,6 +402,18 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 			// We are not done, we need to respond with the tool response
 			msgHistory = append(msgHistory, agentMessage, *toolResults)
 			continue
+		}
+		// First turn complete — generate title now that we have both sides of the exchange.
+		if isFirstTurn {
+			captured := agentMessage
+			go func() {
+				defer logging.RecoverPanic("agent.generateTitle", func() {
+					logging.ErrorPersist("panic while generating title")
+				})
+				if titleErr := a.generateTitle(context.Background(), sessionID, content, captured); titleErr != nil {
+					logging.ErrorPersist(fmt.Sprintf("failed to generate title: %v", titleErr))
+				}
+			}()
 		}
 		return AgentEvent{
 			Type:    AgentEventTypeResponse,

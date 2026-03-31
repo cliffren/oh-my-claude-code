@@ -27,20 +27,23 @@ type cacheItem struct {
 	content []uiMessage
 }
 type messagesCmp struct {
-	app            *app.App
-	width, height  int
-	viewport       viewport.Model
-	session        session.Session
-	messages       []message.Message
-	uiMessages     []uiMessage
-	currentMsgID   string
-	cachedContent  map[string]cacheItem
-	expandedBlocks map[string]bool
-	spinner        spinner.Model
-	rendering      bool
-	attachments    viewport.Model
-	selection      selectionController
-	clipboard      clipboardWriter
+	app             *app.App
+	width, height   int
+	viewport        viewport.Model
+	session         session.Session
+	messages        []message.Message
+	uiMessages      []uiMessage
+	currentMsgID    string
+	cachedContent   map[string]cacheItem
+	expandedBlocks  map[string]bool
+	blockParent     map[string]string // blockID → parent message ID, for precise cache invalidation
+	scrollbarNormal string            // pre-rendered scrollbar normal char (refreshed on theme change)
+	scrollbarThumb  string            // pre-rendered scrollbar thumb char
+	spinner         spinner.Model
+	rendering       bool
+	attachments     viewport.Model
+	selection       selectionController
+	clipboard       clipboardWriter
 }
 
 type ToggleExpandMsg struct {
@@ -82,6 +85,7 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case dialog.ThemeChangedMsg:
+		m.rebuildScrollbarStrings()
 		m.rerender()
 		return m, nil
 	case SessionSelectedMsg:
@@ -96,20 +100,18 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.expandedBlocks[msg.BlockID] = true
 		}
-		// Find the parent message ID and invalidate its cache.
-		// Thinking blocks use ID = msgID+"-thinking" so prefix match works.
-		// Tool call blocks use toolCall.ID which doesn't share a prefix with
-		// the parent message ID, so we clear all cache as a fallback.
-		found := false
-		for _, mm := range m.messages {
-			if strings.HasPrefix(msg.BlockID, mm.ID) {
-				delete(m.cachedContent, mm.ID)
-				found = true
-				break
+		// Precise cache invalidation: blockParent maps individual tool call IDs
+		// (and group/thinking block IDs) to their parent message ID.
+		if parentID, ok := m.blockParent[msg.BlockID]; ok {
+			delete(m.cachedContent, parentID)
+		} else {
+			// Fallback prefix match for any block not yet in the map.
+			for _, mm := range m.messages {
+				if strings.HasPrefix(msg.BlockID, mm.ID) {
+					delete(m.cachedContent, mm.ID)
+					break
+				}
 			}
-		}
-		if !found {
-			m.cachedContent = make(map[string]cacheItem)
 		}
 		m.renderView()
 		return m, nil
@@ -254,6 +256,7 @@ func (m *messagesCmp) renderView() {
 		return
 	}
 	contentWidth := max(0, m.viewport.Width)
+	m.blockParent = make(map[string]string)
 	for inx, msg := range m.messages {
 		switch msg.Role {
 		case message.User:
@@ -274,30 +277,36 @@ func (m *messagesCmp) renderView() {
 			}
 			pos += userMsg.height + 1 // + 1 for spacing
 		case message.Assistant:
+			var assistantMessages []uiMessage
 			if cache, ok := m.cachedContent[msg.ID]; ok && cache.width == contentWidth {
-				m.uiMessages = append(m.uiMessages, cache.content...)
-				continue
+				assistantMessages = cache.content
+			} else {
+				isSummary := m.session.SummaryMessageID == msg.ID
+				assistantMessages = renderAssistantMessage(
+					msg,
+					inx,
+					m.messages,
+					m.app.Messages,
+					m.currentMsgID,
+					isSummary,
+					contentWidth,
+					pos,
+					m.expandedBlocks,
+				)
+				m.cachedContent[msg.ID] = cacheItem{
+					width:   contentWidth,
+					content: assistantMessages,
+				}
 			}
-			isSummary := m.session.SummaryMessageID == msg.ID
-
-			assistantMessages := renderAssistantMessage(
-				msg,
-				inx,
-				m.messages,
-				m.app.Messages,
-				m.currentMsgID,
-				isSummary,
-				contentWidth,
-				pos,
-				m.expandedBlocks,
-			)
-			for _, msg := range assistantMessages {
-				m.uiMessages = append(m.uiMessages, msg)
-				pos += msg.height + 1 // + 1 for spacing
-			}
-			m.cachedContent[msg.ID] = cacheItem{
-				width:   contentWidth,
-				content: assistantMessages,
+			for _, uiMsg := range assistantMessages {
+				m.uiMessages = append(m.uiMessages, uiMsg)
+				pos += uiMsg.height + 1 // + 1 for spacing
+				// Map this uiMessage and its subBlocks to the parent message ID
+				// so ToggleExpandMsg can invalidate precisely without wiping all cache.
+				m.blockParent[uiMsg.ID] = msg.ID
+				for _, sub := range uiMsg.subBlocks {
+					m.blockParent[sub.id] = msg.ID
+				}
 			}
 		}
 	}
@@ -476,6 +485,12 @@ func (m *messagesCmp) initialScreen() string {
 	)
 }
 
+func (m *messagesCmp) rebuildScrollbarStrings() {
+	t := theme.CurrentTheme()
+	m.scrollbarNormal = lipgloss.NewStyle().Foreground(t.BorderNormal()).Render("│")
+	m.scrollbarThumb = lipgloss.NewStyle().Foreground(t.Primary()).Render("█")
+}
+
 func (m *messagesCmp) rerender() {
 	for _, msg := range m.messages {
 		delete(m.cachedContent, msg.ID)
@@ -544,15 +559,18 @@ func NewMessagesCmp(app *app.App) tea.Model {
 	vp.KeyMap.PageDown = messageKeys.PageDown
 	vp.KeyMap.HalfPageUp = messageKeys.HalfPageUp
 	vp.KeyMap.HalfPageDown = messageKeys.HalfPageDown
-	return &messagesCmp{
+	cmp := &messagesCmp{
 		app:            app,
 		cachedContent:  make(map[string]cacheItem),
 		expandedBlocks: make(map[string]bool),
+		blockParent:    make(map[string]string),
 		viewport:       vp,
-		spinner:       s,
-		attachments:   attachmets,
-		clipboard:     newClipboardWriter(),
+		spinner:        s,
+		attachments:    attachmets,
+		clipboard:      newClipboardWriter(),
 	}
+	cmp.rebuildScrollbarStrings()
+	return cmp
 }
 
 // hitTestExpandCollapse checks if a viewport Y coordinate is on an expand/collapse hint line.
@@ -611,17 +629,17 @@ func (m *messagesCmp) visiblePlainLines() []string {
 }
 
 func (m *messagesCmp) renderViewport() string {
-	t := theme.CurrentTheme()
 	visible := strings.Split(m.viewport.View(), "\n")
 	for len(visible) < m.viewport.Height {
 		visible = append(visible, "")
 	}
 	if m.selection.hasSelection() {
+		t := theme.CurrentTheme()
 		start, end := m.selection.bounds()
 		visible = highlightSelectedLines(visible, start, end, lipgloss.NewStyle().Background(t.BackgroundSecondary()).Foreground(t.Text()))
 	}
 	thumb := calculateScrollbarThumb(m.viewport.Height, m.viewport.TotalLineCount(), m.viewport.YOffset)
-	scrollbar := renderScrollbar(m.viewport.Height, thumb, lipgloss.NewStyle().Foreground(t.BorderNormal()).Render("│"), lipgloss.NewStyle().Foreground(t.Primary()).Render("█"))
+	scrollbar := renderScrollbar(m.viewport.Height, thumb, m.scrollbarNormal, m.scrollbarThumb)
 	joined := make([]string, len(visible))
 	for i := range visible {
 		joined[i] = lipgloss.JoinHorizontal(lipgloss.Top, visible[i], scrollbar[i])
