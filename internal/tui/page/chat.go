@@ -19,6 +19,10 @@ import (
 
 var ChatPage PageID = "chat"
 
+// sidebarMinWidth is the minimum terminal width required to show the sidebar.
+// Below this threshold the sidebar is hidden to give more space to the chat area.
+const sidebarMinWidth = 120
+
 type chatPage struct {
 	app                  *app.App
 	editor               layout.Container
@@ -30,6 +34,8 @@ type chatPage struct {
 	showCompletionDialog bool
 	slashDialog          dialog.CommandDialog
 	showSlashDialog      bool
+	sidebarInLayout      bool // whether the right panel is currently mounted in the layout
+	currentWidth         int  // last known terminal width, used for responsive sidebar threshold
 }
 
 // PhysicalCursorPos returns the 1-indexed terminal (row, col) for the text
@@ -84,8 +90,17 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		p.currentWidth = msg.Width
 		cmd := p.layout.SetSize(msg.Width, msg.Height)
 		cmds = append(cmds, cmd)
+		// Responsive sidebar: auto show/hide when crossing the width threshold.
+		if p.session.ID != "" {
+			if msg.Width >= sidebarMinWidth && !p.sidebarInLayout {
+				cmds = append(cmds, p.setSidebar())
+			} else if msg.Width < sidebarMinWidth && p.sidebarInLayout {
+				cmds = append(cmds, p.clearSidebar())
+			}
+		}
 	case dialog.CompletionDialogCloseMsg:
 		p.showCompletionDialog = false
 	case chat.ShowSlashMenuMsg:
@@ -195,14 +210,22 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p *chatPage) setSidebar() tea.Cmd {
+	// If the terminal is too narrow, record that the sidebar is wanted but don't
+	// mount it — it will be shown automatically when the window widens.
+	if p.currentWidth > 0 && p.currentWidth < sidebarMinWidth {
+		p.sidebarInLayout = false
+		return nil
+	}
 	sidebarContainer := layout.NewContainer(
 		chat.NewSidebarCmp(p.session, p.app.History, p.app.TodoStore),
 		layout.WithPadding(1, 1, 1, 1),
 	)
+	p.sidebarInLayout = true
 	return tea.Batch(p.layout.SetRightPanel(sidebarContainer), sidebarContainer.Init())
 }
 
 func (p *chatPage) clearSidebar() tea.Cmd {
+	p.sidebarInLayout = false
 	return p.layout.ClearRightPanel()
 }
 
