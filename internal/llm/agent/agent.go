@@ -640,14 +640,33 @@ func (a *agent) TrackUsage(ctx context.Context, sessionID string, model models.M
 	}
 
 	sess.Cost += cost
-	sess.CompletionTokens = usage.OutputTokens + usage.CacheReadTokens
-	sess.PromptTokens = usage.InputTokens + usage.CacheCreationTokens
+	// For providers that report per-call context tokens (e.g. Claude Code),
+	// use those for accurate context window display. Otherwise fall back
+	// to the cumulative token counts.
+	if usage.ContextTokens > 0 {
+		sess.PromptTokens = usage.ContextTokens
+		sess.CompletionTokens = 0
+	} else {
+		sess.CompletionTokens = usage.OutputTokens + usage.CacheReadTokens
+		sess.PromptTokens = usage.InputTokens + usage.CacheCreationTokens
+	}
+	if usage.ContextWindow > 0 {
+		sess.ContextWindow = usage.ContextWindow
+	}
 
 	_, err = a.sessions.Save(ctx, sess)
 	if err != nil {
 		return fmt.Errorf("failed to save session: %w", err)
 	}
 	return nil
+}
+
+// closeProvider releases resources held by the current provider (e.g. a
+// persistent Claude Code subprocess) before it is replaced.
+func (a *agent) closeProvider() {
+	if c, ok := a.provider.(provider.ProviderCloser); ok {
+		c.Close()
+	}
 }
 
 func (a *agent) Update(agentName config.AgentName, modelID models.ModelID) (models.Model, error) {
@@ -659,12 +678,13 @@ func (a *agent) Update(agentName config.AgentName, modelID models.ModelID) (mode
 		return models.Model{}, fmt.Errorf("failed to update config: %w", err)
 	}
 
-	provider, err := createAgentProvider(agentName, provider.WithPermissionMode(a.permissionMode))
+	p, err := createAgentProvider(agentName, provider.WithPermissionMode(a.permissionMode))
 	if err != nil {
 		return models.Model{}, fmt.Errorf("failed to create provider for model %s: %w", modelID, err)
 	}
 
-	a.provider = provider
+	a.closeProvider()
+	a.provider = p
 
 	return a.provider.Model(), nil
 }
@@ -680,6 +700,7 @@ func (a *agent) UpdateEffort(agentName config.AgentName, effort string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create provider with new effort: %w", err)
 	}
+	a.closeProvider()
 	a.provider = p
 	return nil
 }
@@ -700,6 +721,7 @@ func (a *agent) UpdatePermissionMode(mode string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create provider with new permission mode: %w", err)
 	}
+	a.closeProvider()
 	a.provider = p
 	return nil
 }

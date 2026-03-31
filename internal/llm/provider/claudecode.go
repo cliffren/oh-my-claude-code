@@ -36,10 +36,11 @@ type claudeEvent struct {
 	// Result fields (only present when type == "result")
 	DurationMs    int64        `json:"duration_ms,omitempty"`
 	DurationApiMs int64        `json:"duration_api_ms,omitempty"`
-	TotalCostUsd  float64      `json:"total_cost_usd,omitempty"`
-	Usage         *claudeUsage `json:"usage,omitempty"`
-	IsError       bool         `json:"is_error,omitempty"`
-	Result        string       `json:"result,omitempty"`
+	TotalCostUsd  float64                       `json:"total_cost_usd,omitempty"`
+	Usage         *claudeUsage                 `json:"usage,omitempty"`
+	ModelUsage    map[string]claudeModelUsage  `json:"modelUsage,omitempty"`
+	IsError       bool                         `json:"is_error,omitempty"`
+	Result        string                       `json:"result,omitempty"`
 	// status fields (only present when type == "system", subtype == "status")
 	Status string `json:"status,omitempty"` // "compacting" or null/""
 	// api_retry fields (only present when type == "system", subtype == "api_retry")
@@ -75,6 +76,7 @@ type claudeMessage struct {
 	Role    string          `json:"role"`
 	Content json.RawMessage `json:"content"` // string or array of content blocks
 	Model   string          `json:"model,omitempty"`
+	Usage   *claudeUsage    `json:"usage,omitempty"`
 }
 
 type claudeContentBlock struct {
@@ -96,6 +98,11 @@ type claudeUsage struct {
 	OutputTokens             int64 `json:"output_tokens"`
 	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens,omitempty"`
 	CacheReadInputTokens     int64 `json:"cache_read_input_tokens,omitempty"`
+}
+
+type claudeModelUsage struct {
+	ContextWindow  int64 `json:"contextWindow,omitempty"`
+	MaxOutputTokens int64 `json:"maxOutputTokens,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -140,6 +147,11 @@ func newClaudeCodeClient(opts providerClientOptions) ClaudeCodeClient {
 	return &claudeCodeClient{
 		providerOptions: opts,
 	}
+}
+
+// Close implements ProviderCloser. It kills the persistent CLI process.
+func (c *claudeCodeClient) Close() {
+	c.killConn()
 }
 
 // SetResumeSessionID implements SessionResumer. It pre-seeds the session ID
@@ -498,6 +510,9 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 	var fullContent strings.Builder
 	var totalUsage TokenUsage
 	hadStreamDeltas := false
+	// Track the latest API call's actual context window utilization
+	// (from assistant message usage, not the cumulative result usage).
+	var lastContextTokens int64
 
 	// Track active tool calls for proper start/stop events.
 	activeToolCalls := make(map[string]bool)
@@ -564,6 +579,11 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 			if event.Message == nil {
 				continue
 			}
+			// Track the latest API call's context window utilization.
+			if event.Message.Usage != nil {
+				u := event.Message.Usage
+				lastContextTokens = u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+			}
 			c.handleAssistantMessage(event.Message, eventChan, activeToolCalls, &fullContent, hadStreamDeltas)
 
 		case "user":
@@ -602,6 +622,14 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 					OutputTokens:        event.Usage.OutputTokens,
 					CacheCreationTokens: event.Usage.CacheCreationInputTokens,
 					CacheReadTokens:     event.Usage.CacheReadInputTokens,
+					ContextTokens:       lastContextTokens,
+				}
+			}
+			// Extract the real context window from modelUsage (varies by plan).
+			for _, mu := range event.ModelUsage {
+				if mu.ContextWindow > 0 {
+					totalUsage.ContextWindow = mu.ContextWindow
+					break
 				}
 			}
 			if event.SessionID != "" {
@@ -679,10 +707,16 @@ func (c *claudeCodeClient) handleAssistantMessage(msg *claudeMessage, eventChan 
 		// Only emit text from assistant messages if no stream_event deltas
 		// were received for this turn, to avoid double-counting.
 		if block.Type == "text" && block.Text != "" && !hadStreamDeltas {
-			fullContent.WriteString(block.Text)
+			text := block.Text
+			// Separate text from different internal turns with a newline
+			// so they don't run together in the chat display.
+			if fullContent.Len() > 0 && !strings.HasSuffix(fullContent.String(), "\n") {
+				text = "\n" + text
+			}
+			fullContent.WriteString(text)
 			eventChan <- ProviderEvent{
 				Type:    EventContentDelta,
-				Content: block.Text,
+				Content: text,
 			}
 		}
 		if block.Type == "thinking" && block.Thinking != "" {

@@ -18,6 +18,7 @@ type Session struct {
 	CompletionTokens int64
 	SummaryMessageID string
 	ClaudeSessionID  string // Claude Code CLI session ID for --resume
+	ContextWindow    int64  // actual context window reported by provider (0 = use model default)
 	Cost             float64
 	CreatedAt        int64
 	UpdatedAt        int64

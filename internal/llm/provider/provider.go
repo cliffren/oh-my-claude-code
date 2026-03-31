@@ -51,6 +51,13 @@ type TokenUsage struct {
 	OutputTokens        int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
+	// ContextTokens is the actual context window utilization from the latest
+	// API call (input + cache_creation + cache_read). Only set by providers
+	// that report per-call usage (e.g. Claude Code assistant messages).
+	ContextTokens int64
+	// ContextWindow is the actual context window size reported by the provider
+	// (may differ from the hardcoded model value based on subscription plan).
+	ContextWindow int64
 }
 
 type ProviderResponse struct {
@@ -74,6 +81,12 @@ type InitData struct {
 // external session (e.g. Claude Code CLI --resume).
 type SessionResumer interface {
 	SetResumeSessionID(id string)
+}
+
+// ProviderCloser is implemented by providers that hold resources (e.g. a
+// persistent subprocess) that should be released when the provider is replaced.
+type ProviderCloser interface {
+	Close()
 }
 
 type ProviderEvent struct {
@@ -246,6 +259,13 @@ func (p *baseProvider[C]) SendControlResponse(requestID, sessionID string, allow
 func (p *baseProvider[C]) SetResumeSessionID(id string) {
 	if sr, ok := any(p.client).(SessionResumer); ok {
 		sr.SetResumeSessionID(id)
+	}
+}
+
+// Close forwards to the underlying client if it implements ProviderCloser.
+func (p *baseProvider[C]) Close() {
+	if c, ok := any(p.client).(ProviderCloser); ok {
+		c.Close()
 	}
 }
 
