@@ -3,7 +3,9 @@ package chat
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -22,6 +24,16 @@ import (
 	"github.com/cliffren/toc/internal/tui/theme"
 	"github.com/cliffren/toc/internal/tui/util"
 )
+
+// ReloadModifiedFilesMsg tells the sidebar to reload modified files from git.
+type ReloadModifiedFilesMsg struct{}
+
+type gitModFilesLoadedMsg struct {
+	files map[string]struct {
+		additions int
+		removals  int
+	}
+}
 
 type sidebarCmp struct {
 	width, height int
@@ -111,6 +123,12 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.rebuildViewport()
 			}
 		}
+	case ReloadModifiedFilesMsg:
+		return m, loadModifiedFilesFromGitCmd()
+	case gitModFilesLoadedMsg:
+		m.modFiles = msg.files
+		m.rebuildViewport()
+		return m, nil
 	case pubsub.Event[history.File]:
 		if msg.Payload.SessionID == m.session.ID {
 			ctx := context.Background()
@@ -518,6 +536,40 @@ func (m *sidebarCmp) findInitialVersion(ctx context.Context, path string) (histo
 	}
 
 	return history.File{}, fmt.Errorf("initial version not found")
+}
+
+func loadModifiedFilesFromGitCmd() tea.Cmd {
+	workingDir := config.WorkingDirectory()
+	return func() tea.Msg {
+		cmd := exec.Command("git", "diff", "--numstat")
+		cmd.Dir = workingDir
+		out, err := cmd.Output()
+		if err != nil {
+			return gitModFilesLoadedMsg{}
+		}
+		files := make(map[string]struct {
+			additions int
+			removals  int
+		})
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line == "" {
+				continue
+			}
+			parts := strings.SplitN(line, "\t", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			adds, _ := strconv.Atoi(parts[0])
+			dels, _ := strconv.Atoi(parts[1])
+			if adds > 0 || dels > 0 {
+				files[parts[2]] = struct {
+					additions int
+					removals  int
+				}{additions: adds, removals: dels}
+			}
+		}
+		return gitModFilesLoadedMsg{files: files}
+	}
 }
 
 // Helper function to get the display path for a file

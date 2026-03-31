@@ -426,6 +426,8 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if (tokens >= int64(float64(contextWindow)*0.95)) && config.Get().AutoCompact {
 					return a, util.CmdHandler(startCompactSessionMsg{})
 				}
+			} else {
+				return a, util.CmdHandler(chat.ReloadModifiedFilesMsg{})
 			}
 		}
 		// Continue listening for events
