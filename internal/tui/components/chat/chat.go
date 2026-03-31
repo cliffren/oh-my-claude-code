@@ -109,22 +109,23 @@ func repo(width int) string {
 		Render(repo)
 }
 
-func cwd(width int) string {
-	wd := config.WorkingDirectory()
-	label := fmt.Sprintf("cwd: %s", wd)
+var cachedCWDLabel string
 
-	cmd := exec.Command("git", "-C", wd, "rev-parse", "--abbrev-ref", "HEAD")
-	if out, err := cmd.Output(); err == nil {
-		branch := strings.TrimSpace(string(out))
-		if branch != "" {
-			label += fmt.Sprintf(" (%s)", branch)
+func cwd(width int) string {
+	if cachedCWDLabel == "" {
+		wd := config.WorkingDirectory()
+		cachedCWDLabel = fmt.Sprintf("cwd: %s", wd)
+		cmd := exec.Command("git", "-C", wd, "rev-parse", "--abbrev-ref", "HEAD")
+		if out, err := cmd.Output(); err == nil {
+			if branch := strings.TrimSpace(string(out)); branch != "" {
+				cachedCWDLabel += fmt.Sprintf(" (%s)", branch)
+			}
 		}
 	}
-
 	t := theme.CurrentTheme()
 	return styles.BaseStyle().
 		Foreground(t.TextMuted()).
 		Width(width).
-		Render(label)
+		Render(cachedCWDLabel)
 }
 

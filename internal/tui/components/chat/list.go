@@ -39,6 +39,8 @@ type messagesCmp struct {
 	blockParent     map[string]string // blockID → parent message ID, for precise cache invalidation
 	scrollbarNormal string            // pre-rendered scrollbar normal char (refreshed on theme change)
 	scrollbarThumb  string            // pre-rendered scrollbar thumb char
+	cachedHelp      string            // pre-rendered help line (refreshed on busy-state or size change)
+	lastHelpBusy    bool
 	spinner         spinner.Model
 	rendering       bool
 	attachments     viewport.Model
@@ -444,20 +446,24 @@ func (m *messagesCmp) working() string {
 }
 
 func (m *messagesCmp) help() string {
+	busy := m.app.CoderAgent.IsBusy()
+	if m.cachedHelp != "" && busy == m.lastHelpBusy {
+		return m.cachedHelp
+	}
+	m.lastHelpBusy = busy
+
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
-
-	text := ""
-
-	if m.app.CoderAgent.IsBusy() {
-		text += lipgloss.JoinHorizontal(
+	var text string
+	if busy {
+		text = lipgloss.JoinHorizontal(
 			lipgloss.Left,
 			baseStyle.Foreground(t.TextMuted()).Bold(true).Render("press "),
 			baseStyle.Foreground(t.Text()).Bold(true).Render("esc"),
 			baseStyle.Foreground(t.TextMuted()).Bold(true).Render(" to exit cancel"),
 		)
 	} else {
-		text += lipgloss.JoinHorizontal(
+		text = lipgloss.JoinHorizontal(
 			lipgloss.Left,
 			baseStyle.Foreground(t.TextMuted()).Bold(true).Render("press "),
 			baseStyle.Foreground(t.Text()).Bold(true).Render("enter"),
@@ -467,9 +473,8 @@ func (m *messagesCmp) help() string {
 			baseStyle.Foreground(t.TextMuted()).Bold(true).Render(" and enter to add a new line"),
 		)
 	}
-	return baseStyle.
-		Width(m.width).
-		Render(text)
+	m.cachedHelp = baseStyle.Width(m.width).Render(text)
+	return m.cachedHelp
 }
 
 func (m *messagesCmp) initialScreen() string {
@@ -489,9 +494,11 @@ func (m *messagesCmp) rebuildScrollbarStrings() {
 	t := theme.CurrentTheme()
 	m.scrollbarNormal = lipgloss.NewStyle().Foreground(t.BorderNormal()).Render("│")
 	m.scrollbarThumb = lipgloss.NewStyle().Foreground(t.Primary()).Render("█")
+	m.cachedHelp = "" // theme changed — invalidate help cache
 }
 
 func (m *messagesCmp) rerender() {
+	m.cachedHelp = "" // size or theme changed
 	for _, msg := range m.messages {
 		delete(m.cachedContent, msg.ID)
 	}
@@ -640,9 +647,16 @@ func (m *messagesCmp) renderViewport() string {
 	}
 	thumb := calculateScrollbarThumb(m.viewport.Height, m.viewport.TotalLineCount(), m.viewport.YOffset)
 	scrollbar := renderScrollbar(m.viewport.Height, thumb, m.scrollbarNormal, m.scrollbarThumb)
-	joined := make([]string, len(visible))
-	for i := range visible {
-		joined[i] = lipgloss.JoinHorizontal(lipgloss.Top, visible[i], scrollbar[i])
+	// Direct string concatenation instead of lipgloss.JoinHorizontal:
+	// viewport content is rendered at a fixed width, so ANSI width measurement is unnecessary.
+	var b strings.Builder
+	b.Grow(len(visible) * (m.viewport.Width + 4))
+	for i, line := range visible {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(line)
+		b.WriteString(scrollbar[i])
 	}
-	return strings.Join(joined, "\n")
+	return b.String()
 }
