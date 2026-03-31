@@ -3,8 +3,11 @@ package completions
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/cliffren/toc/internal/fileutil"
@@ -26,6 +29,22 @@ func (cg *filesAndFoldersContextGroup) GetEntry() dialog.CompletionItemI {
 		Value: "files",
 	})
 }
+
+// git repo detection, cached per process
+var (
+	gitRepoOnce sync.Once
+	inGitRepo   bool
+)
+
+func isInGitRepo() bool {
+	gitRepoOnce.Do(func() {
+		cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+		cmd.Dir = "."
+		inGitRepo = cmd.Run() == nil
+	})
+	return inGitRepo
+}
+
 
 func processNullTerminatedOutput(outputBytes []byte) []string {
 	if len(outputBytes) > 0 && outputBytes[len(outputBytes)-1] == 0 {
@@ -56,6 +75,85 @@ func processNullTerminatedOutput(outputBytes []byte) []string {
 }
 
 func (cg *filesAndFoldersContextGroup) getFiles(query string) ([]string, error) {
+	if !isInGitRepo() {
+		// Browsing mode: empty query or navigated into a dir (ends with "/")
+		if query == "" || strings.HasSuffix(query, "/") {
+			return cg.getFilesOneLevel(query)
+		}
+		// Search mode: user typed a filter string → rg max-depth 2
+		return cg.getFilesShallow(query)
+	}
+	return cg.getFilesRg(query)
+}
+
+func getShallowRgCmd() *exec.Cmd {
+	rgPath, err := exec.LookPath("rg")
+	if err != nil {
+		return nil
+	}
+	cmd := exec.Command(rgPath, "--files", "-L", "--null", "--max-depth", "2")
+	cmd.Dir = "."
+	return cmd
+}
+
+// getFilesShallow uses rg with max-depth 2 for non-git dirs when user has typed a query.
+func (cg *filesAndFoldersContextGroup) getFilesShallow(query string) ([]string, error) {
+	cmdRg := getShallowRgCmd()
+	if cmdRg == nil {
+		return cg.getFilesOneLevel(query)
+	}
+
+	var rgOut bytes.Buffer
+	cmdRg.Stdout = &rgOut
+	if err := cmdRg.Run(); err != nil {
+		return cg.getFilesOneLevel(query)
+	}
+
+	allFiles := processNullTerminatedOutput(rgOut.Bytes())
+	return fuzzy.Find(query, allFiles), nil
+}
+
+// getFilesOneLevel lists one directory level for non-git directories.
+// query may encode a path: "src/co" → list ./src/, filter entries containing "co".
+func (cg *filesAndFoldersContextGroup) getFilesOneLevel(query string) ([]string, error) {
+	dirPath := "."
+	filter := query
+	if idx := strings.LastIndex(query, "/"); idx >= 0 {
+		sub := query[:idx]
+		if sub != "" {
+			dirPath = sub
+		}
+		filter = query[idx+1:]
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	files := make([]string, 0, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		display := name
+		if e.IsDir() {
+			display = name + "/"
+		}
+		if filter == "" || strings.Contains(strings.ToLower(display), strings.ToLower(filter)) {
+			if dirPath == "." {
+				files = append(files, display)
+			} else {
+				files = append(files, dirPath+"/"+display)
+			}
+		}
+	}
+	return files, nil
+}
+
+// getFilesRg is the original full-scan implementation used inside git repos.
+func (cg *filesAndFoldersContextGroup) getFilesRg(query string) ([]string, error) {
 	cmdRg := fileutil.GetRgCmd("") // No glob pattern for this use case
 	cmdFzf := fileutil.GetFzfCmd(query)
 
@@ -165,6 +263,7 @@ func (cg *filesAndFoldersContextGroup) getFiles(query string) ([]string, error) 
 
 	return matches, nil
 }
+
 
 func (cg *filesAndFoldersContextGroup) GetChildEntries(query string) ([]dialog.CompletionItemI, error) {
 	matches, err := cg.getFiles(query)

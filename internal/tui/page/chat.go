@@ -194,9 +194,12 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.completionDialog = context.(dialog.CompletionDialog)
 		cmds = append(cmds, contextCmd)
 
-		// Doesn't forward event if enter key is pressed
+		// Don't forward keys consumed by the completion dialog to the layout.
+		// enter/tab select items; up/down navigate the list (and would
+		// accidentally trigger editor history or insert a tab).
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			if keyMsg.String() == "enter" {
+			switch keyMsg.String() {
+			case "enter", "tab", "up", "down":
 				return p, tea.Batch(cmds...)
 			}
 		}

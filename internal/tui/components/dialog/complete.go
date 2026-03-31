@@ -1,6 +1,8 @@
 package dialog
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -84,6 +86,7 @@ type CompletionDialog interface {
 
 type completionDialogCmp struct {
 	query                string
+	searchString         string // actual text typed by user, used as SearchString in CompletionSelectedMsg
 	completionProvider   CompletionProvider
 	width                int
 	height               int
@@ -110,15 +113,13 @@ func (c *completionDialogCmp) Init() tea.Cmd {
 }
 
 func (c *completionDialogCmp) complete(item CompletionItemI) tea.Cmd {
-	value := c.pseudoSearchTextArea.Value()
-
-	if value == "" {
+	if c.searchString == "" {
 		return nil
 	}
 
 	return tea.Batch(
 		util.CmdHandler(CompletionSelectedMsg{
-			SearchString:    value,
+			SearchString:    c.searchString,
 			CompletionValue: item.GetValue(),
 		}),
 		c.close(),
@@ -129,6 +130,8 @@ func (c *completionDialogCmp) close() tea.Cmd {
 	c.listView.SetItems([]CompletionItemI{})
 	c.pseudoSearchTextArea.Reset()
 	c.pseudoSearchTextArea.Blur()
+	c.searchString = ""
+	c.query = ""
 
 	return util.CmdHandler(CompletionDialogCloseMsg{})
 }
@@ -141,6 +144,7 @@ func (c *completionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if !key.Matches(msg, completionDialogKeys.Complete) {
 
+				oldPseudo := c.pseudoSearchTextArea.Value()
 				var cmd tea.Cmd
 				c.pseudoSearchTextArea, cmd = c.pseudoSearchTextArea.Update(msg)
 				cmds = append(cmds, cmd)
@@ -152,6 +156,23 @@ func (c *completionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if query != c.query {
+					// Apply the same edit delta to searchString (which tracks the real
+					// editor content) rather than using the pseudo-textarea value
+					// directly, since the pseudo-textarea may have a navigation prefix
+					// injected by directory selection that is not in the real editor.
+					newPseudo := c.pseudoSearchTextArea.Value()
+					if strings.HasPrefix(newPseudo, oldPseudo) {
+						// Chars appended at end
+						c.searchString = c.searchString + newPseudo[len(oldPseudo):]
+					} else if strings.HasPrefix(oldPseudo, newPseudo) {
+						// Chars deleted from end
+						deleted := len(oldPseudo) - len(newPseudo)
+						if len(c.searchString) >= deleted {
+							c.searchString = c.searchString[:len(c.searchString)-deleted]
+						}
+					}
+					// Complex edits (paste, mid-string delete): keep existing
+					// searchString — these are rare in a completion search box.
 					logging.Info("Query", query)
 					items, err := c.completionProvider.GetChildEntries(query)
 					if err != nil {
@@ -175,6 +196,19 @@ func (c *completionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return c, nil
 				}
 
+				// Directory: navigate into it instead of completing
+				if strings.HasSuffix(item.GetValue(), "/") {
+					query := item.GetValue()
+					c.pseudoSearchTextArea.SetValue("@" + query)
+					c.query = query
+					items, err := c.completionProvider.GetChildEntries(query)
+					if err != nil {
+						logging.Error("Failed to get child entries", err)
+					}
+					c.listView.SetItems(items)
+					return c, nil
+				}
+
 				cmd := c.complete(item)
 
 				return c, cmd
@@ -194,6 +228,7 @@ func (c *completionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			c.listView.SetItems(items)
 			c.pseudoSearchTextArea.SetValue(msg.String())
+			c.searchString = msg.String()
 			return c, c.pseudoSearchTextArea.Focus()
 		}
 	case tea.WindowSizeMsg:
