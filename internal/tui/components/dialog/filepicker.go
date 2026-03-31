@@ -363,6 +363,9 @@ type FilepickerCmp interface {
 
 func (f *filepickerCmp) ToggleFilepicker(showFilepicker bool) {
 	f.ShowFilePicker = showFilepicker
+	if showFilepicker && f.dirs == nil {
+		f.dirs = readDir(f.cwdDetails.directory, false)
+	}
 }
 
 func (f *filepickerCmp) IsCWDFocused() bool {
@@ -376,14 +379,13 @@ func NewFilepickerCmp(app *app.App) FilepickerCmp {
 		return nil
 	}
 	baseDir := DirNode{parent: nil, directory: homepath}
-	dirs := readDir(homepath, false)
 	viewport := viewport.New(0, 0)
 	currentDirectory := textinput.New()
 	currentDirectory.CharLimit = 200
 	currentDirectory.Width = 44
 	currentDirectory.Cursor.Blink = true
 	currentDirectory.SetValue(baseDir.directory)
-	return &filepickerCmp{cwdDetails: &baseDir, dirs: dirs, cursorChain: make(stack, 0), viewport: viewport, cwd: currentDirectory, app: app}
+	return &filepickerCmp{cwdDetails: &baseDir, cursorChain: make(stack, 0), viewport: viewport, cwd: currentDirectory, app: app}
 }
 
 func (f *filepickerCmp) getCurrentFileBelowCursor() {
