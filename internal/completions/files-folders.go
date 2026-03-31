@@ -91,12 +91,14 @@ func getShallowRgCmd() *exec.Cmd {
 	if err != nil {
 		return nil
 	}
-	cmd := exec.Command(rgPath, "--files", "-L", "--null", "--max-depth", "2")
+	// --hidden: include dotfiles (unlike navigation mode which filters them)
+	cmd := exec.Command(rgPath, "--files", "-L", "--null", "--hidden", "--max-depth", "2")
 	cmd.Dir = "."
 	return cmd
 }
 
 // getFilesShallow uses rg with max-depth 2 for non-git dirs when user has typed a query.
+// Dotfiles are included (unlike navigation mode) so users can search for them explicitly.
 func (cg *filesAndFoldersContextGroup) getFilesShallow(query string) ([]string, error) {
 	cmdRg := getShallowRgCmd()
 	if cmdRg == nil {
@@ -109,7 +111,17 @@ func (cg *filesAndFoldersContextGroup) getFilesShallow(query string) ([]string, 
 		return cg.getFilesOneLevel(query)
 	}
 
-	allFiles := processNullTerminatedOutput(rgOut.Bytes())
+	// Parse without SkipHidden — dotfiles are intentionally included here.
+	raw := rgOut.Bytes()
+	if len(raw) > 0 && raw[len(raw)-1] == 0 {
+		raw = raw[:len(raw)-1]
+	}
+	var allFiles []string
+	for _, p := range bytes.Split(raw, []byte{0}) {
+		if len(p) > 0 {
+			allFiles = append(allFiles, filepath.Join(".", string(p)))
+		}
+	}
 	return fuzzy.Find(query, allFiles), nil
 }
 
