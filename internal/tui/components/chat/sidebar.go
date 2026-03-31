@@ -43,10 +43,11 @@ type sidebarCmp struct {
 	todoStore     *tools.TodoStore
 	selection     selectionController
 	clipboard     clipboardWriter
-	modFiles      map[string]struct {
+	modFiles map[string]struct {
 		additions int
 		removals  int
 	}
+	modFileLines map[int]string // viewport line → file path for click detection
 	filesCh <-chan pubsub.Event[history.File]
 	todoCh  <-chan pubsub.Event[tools.TodoEvent]
 }
@@ -94,6 +95,12 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport = u
 			cmds = append(cmds, cmd)
 			return m, tea.Batch(cmds...)
+		}
+		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft && m.modFileLines != nil {
+			lineIdx := m.viewport.YOffset + msg.Y
+			if filePath, ok := m.modFileLines[lineIdx]; ok {
+				return m, util.CmdHandler(dialog.ShowDiffMsg{FilePath: filePath})
+			}
 		}
 		_, _, copied, err := m.selection.handleMouse(msg, m.selectionRegion(), m.visiblePlainLines(), m.clipboard)
 		if err != nil {
@@ -159,7 +166,26 @@ func (m *sidebarCmp) rebuildViewport() {
 		parts = append(parts, todoSection, " ")
 	}
 
+	// Count lines before modified files section for click map.
+	preLines := 0
+	for _, p := range parts {
+		preLines += strings.Count(p, "\n") + 1
+	}
+
 	parts = append(parts, m.modifiedFiles())
+
+	// Build line→file click map.
+	m.modFileLines = make(map[int]string)
+	if len(m.modFiles) > 0 {
+		var paths []string
+		for p := range m.modFiles {
+			paths = append(paths, p)
+		}
+		sort.Strings(paths)
+		for i, p := range paths {
+			m.modFileLines[preLines+1+i] = p // +1 for "Modified Files:" header
+		}
+	}
 
 	content := lipgloss.JoinVertical(lipgloss.Top, parts...)
 	m.viewport.SetContent(content)

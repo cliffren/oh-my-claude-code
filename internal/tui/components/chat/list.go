@@ -215,12 +215,10 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if needsRerender {
+			wasAtBottom := m.viewport.AtBottom()
 			m.renderView()
-			if len(m.messages) > 0 {
-				if (msg.Type == pubsub.CreatedEvent) ||
-					(msg.Type == pubsub.UpdatedEvent && msg.Payload.ID == m.messages[len(m.messages)-1].ID) {
-					m.viewport.GotoBottom()
-				}
+			if len(m.messages) > 0 && (msg.Type == pubsub.CreatedEvent || wasAtBottom) {
+				m.viewport.GotoBottom()
 			}
 		}
 	}
