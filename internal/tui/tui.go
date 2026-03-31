@@ -1246,23 +1246,23 @@ func WithCursorPos(pos *atomic.Int64) Option {
 func New(app *app.App, opts ...Option) tea.Model {
 	startPage := page.ChatPage
 	model := &appModel{
-		currentPage:   startPage,
-		loadedPages:   make(map[page.PageID]bool),
-		status:        core.NewStatusCmp(), // LSP disabled: was NewStatusCmp(app.LSPClients)
-		help:          dialog.NewHelpCmp(),
-		quit:          dialog.NewQuitCmp(),
-		sessionDialog: dialog.NewSessionDialogCmp(),
-		commandDialog: dialog.NewCommandDialogCmp(),
-		modelDialog:   dialog.NewModelDialogCmp(),
+		currentPage:          startPage,
+		loadedPages:          make(map[page.PageID]bool),
+		status:               core.NewStatusCmp(), // LSP disabled: was NewStatusCmp(app.LSPClients)
+		help:                 dialog.NewHelpCmp(),
+		quit:                 dialog.NewQuitCmp(),
+		sessionDialog:        dialog.NewSessionDialogCmp(),
+		commandDialog:        dialog.NewCommandDialogCmp(),
+		modelDialog:          dialog.NewModelDialogCmp(),
 		effortDialog:         dialog.NewEffortDialogCmp(),
 		permissionModeDialog: dialog.NewPermissionModeDialog(),
 		diffViewer:           dialog.NewDiffViewer(),
 		permissions:          dialog.NewPermissionDialogCmp(),
-		initDialog:    dialog.NewInitDialogCmp(),
-		themeDialog:   dialog.NewThemeDialogCmp(),
-		app:           app,
-		commands:      []dialog.Command{},
-		mouseEnabled:  true,
+		initDialog:           dialog.NewInitDialogCmp(),
+		themeDialog:          dialog.NewThemeDialogCmp(),
+		app:                  app,
+		commands:             []dialog.Command{},
+		mouseEnabled:         true,
 		pages: map[page.PageID]tea.Model{
 			page.ChatPage: page.NewChatPage(app),
 			page.LogsPage: page.NewLogsPage(),
