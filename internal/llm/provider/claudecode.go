@@ -510,6 +510,9 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 	var fullContent strings.Builder
 	var totalUsage TokenUsage
 	hadStreamDeltas := false
+	// needsSeparator is set after a tool-result round so the next text
+	// segment starts on a new line instead of running into the prior text.
+	needsSeparator := false
 	// Track the latest API call's actual context window utilization
 	// (from assistant message usage, not the cumulative result usage).
 	var lastContextTokens int64
@@ -573,6 +576,13 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 				continue
 			}
 			hadStreamDeltas = true
+			if needsSeparator {
+				needsSeparator = false
+				if fullContent.Len() > 0 && !strings.HasSuffix(fullContent.String(), "\n") {
+					fullContent.WriteString("\n")
+					eventChan <- ProviderEvent{Type: EventContentDelta, Content: "\n"}
+				}
+			}
 			c.handleStreamEvent(event.Event, eventChan, &fullContent)
 
 		case "assistant":
@@ -591,6 +601,7 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 				continue
 			}
 			c.handleToolResults(event.Message, eventChan, activeToolCalls)
+			needsSeparator = true
 
 		case "control_request":
 			if event.Request != nil && event.Request.Subtype == "can_use_tool" {
