@@ -578,10 +578,7 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 			hadStreamDeltas = true
 			if needsSeparator {
 				needsSeparator = false
-				if fullContent.Len() > 0 && !strings.HasSuffix(fullContent.String(), "\n") {
-					fullContent.WriteString("\n")
-					eventChan <- ProviderEvent{Type: EventContentDelta, Content: "\n"}
-				}
+				emitNewlineSeparator(&fullContent, eventChan)
 			}
 			c.handleStreamEvent(event.Event, eventChan, &fullContent)
 
@@ -595,6 +592,11 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 				lastContextTokens = u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
 			}
 			c.handleAssistantMessage(event.Message, eventChan, activeToolCalls, &fullContent, hadStreamDeltas)
+			// handleAssistantMessage has its own separator logic when !hadStreamDeltas;
+			// clear the flag so a subsequent stream_event doesn't add a second newline.
+			if !hadStreamDeltas {
+				needsSeparator = false
+			}
 
 		case "user":
 			if event.Message == nil {
@@ -676,6 +678,15 @@ func (c *claudeCodeClient) processStream(ctx context.Context, scanner *bufio.Sca
 }
 
 // handleStreamEvent processes inner stream events from stream_event.event.
+// emitNewlineSeparator writes a "\n" to content and emits it as a delta
+// event if content is non-empty and does not already end with a newline.
+func emitNewlineSeparator(content *strings.Builder, eventChan chan<- ProviderEvent) {
+	if content.Len() > 0 && !strings.HasSuffix(content.String(), "\n") {
+		content.WriteString("\n")
+		eventChan <- ProviderEvent{Type: EventContentDelta, Content: "\n"}
+	}
+}
+
 func (c *claudeCodeClient) handleStreamEvent(event *streamEvent, eventChan chan<- ProviderEvent, fullContent *strings.Builder) {
 	switch event.Type {
 	case "error":
@@ -718,16 +729,11 @@ func (c *claudeCodeClient) handleAssistantMessage(msg *claudeMessage, eventChan 
 		// Only emit text from assistant messages if no stream_event deltas
 		// were received for this turn, to avoid double-counting.
 		if block.Type == "text" && block.Text != "" && !hadStreamDeltas {
-			text := block.Text
-			// Separate text from different internal turns with a newline
-			// so they don't run together in the chat display.
-			if fullContent.Len() > 0 && !strings.HasSuffix(fullContent.String(), "\n") {
-				text = "\n" + text
-			}
-			fullContent.WriteString(text)
+			emitNewlineSeparator(fullContent, eventChan)
+			fullContent.WriteString(block.Text)
 			eventChan <- ProviderEvent{
 				Type:    EventContentDelta,
-				Content: text,
+				Content: block.Text,
 			}
 		}
 		if block.Type == "thinking" && block.Thinking != "" {
